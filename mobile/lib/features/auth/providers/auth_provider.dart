@@ -1,6 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/providers/api_provider.dart';
 
@@ -95,42 +95,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractError(dynamic e) {
-    if (e is DioException) {
-      final data = e.response?.data;
-      if (data is Map<String, dynamic>) {
-        final errors = data['errors'];
-        if (errors is Map<String, dynamic>) {
-          for (final errorList in errors.values.whereType<List>()) {
-            if (errorList.isNotEmpty) {
-              final message = errorList.first;
-              if (message is String) return message;
-            }
-          }
-        }
-
-        final message = data['message'];
-        if (message is String && message.isNotEmpty) return message;
-      }
-
-      if (e.response?.statusCode == 422 || e.response?.statusCode == 401) {
-        return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
-      }
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        return 'تعذر الاتصال بالخادم. تحقق من الشبكة.';
-      }
-    }
-
-    if (e is Exception) {
-      final msg = e.toString();
-      if (msg.contains('422') || msg.contains('401')) {
-        return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
-      }
-      if (msg.contains('SocketException') || msg.contains('connection')) {
-        return 'تعذر الاتصال بالخادم. تحقق من الشبكة.';
-      }
-    }
-    return 'حدث خطأ. يرجى المحاولة مجدداً.';
+    return AppError.message(
+      e,
+      fallback: 'تعذر تسجيل الدخول. تحقق من البيانات وحاول مجدداً.',
+    );
   }
 }
 

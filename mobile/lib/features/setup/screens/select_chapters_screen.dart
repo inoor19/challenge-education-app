@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
@@ -32,14 +33,17 @@ class SelectChaptersScreen extends ConsumerWidget {
               error: (e, _) => AppStateView(
                 icon: Icons.cloud_off_rounded,
                 title: 'تعذر تحميل الفصول',
-                message: e.toString(),
+                message: AppError.message(
+                  e,
+                  fallback: 'تعذر تحميل الفصول. حاول مجدداً.',
+                ),
               ),
               data: (chapters) => chapters.isEmpty
                   ? const AppStateView(
                       icon: Icons.view_list_rounded,
                       title: 'لا توجد فصول',
                       message:
-                          'يمكنك إضافة فصول لهذا الجزء من إدارة المحتوى داخل التطبيق.',
+                          'يمكنك إضافة فصول لهذا الجزء من صفحة إعداد المنافسة.',
                     )
                   : Column(
                       children: [

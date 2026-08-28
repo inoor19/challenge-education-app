@@ -157,15 +157,14 @@ class _AuthHeroPanel extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(
-            Icons.emoji_events_rounded,
-            color: AppTheme.accent,
-            size: 42,
+          child: const AppLogo(
+            size: 58,
+            padding: EdgeInsets.all(8),
           ),
         ),
         const SizedBox(height: 24),
         const Text(
-          'ساحة التحدي التعليمي',
+          'ساحة التنافس',
           style: TextStyle(
             fontFamily: 'Tajawal',
             color: AppTheme.textDark,
@@ -176,7 +175,7 @@ class _AuthHeroPanel extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'مساحة واحدة لإدارة المحتوى، اختيار الصفوف، وتشغيل تحديات تفاعلية داخل الحصة.',
+          'مساحة واحدة لاختيار الصفوف، إعداد الأسئلة، وتشغيل تحديات تفاعلية داخل الحصة.',
           style: TextStyle(
             fontFamily: 'Tajawal',
             color: AppTheme.textMuted,
@@ -307,10 +306,9 @@ class _AuthFormCard extends StatelessWidget {
                         color: AppTheme.cardGold.withValues(alpha: 0.24),
                       ),
                     ),
-                    child: const Icon(
-                      Icons.emoji_events_rounded,
-                      color: AppTheme.cardGold,
-                      size: 34,
+                    child: const AppLogo(
+                      size: 46,
+                      padding: EdgeInsets.all(7),
                     ),
                   ),
                   const SizedBox(width: 14),

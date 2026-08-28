@@ -62,6 +62,8 @@ class ScoringService
                 'created_by' => $createdBy,
             ]);
 
+            $this->advanceCurrentTurn($session, $groupId);
+
             return [
                 'points_awarded' => $points,
                 'group' => $group->fresh(),
@@ -78,10 +80,33 @@ class ScoringService
         int $groupId,
         int $diceValue
     ): void {
-        $group = ChallengeGroup::findOrFail($groupId);
-        abort_if($group->challenge_session_id !== $session->id, 403);
+        DB::transaction(function () use ($session, $challengeQuestion, $groupId, $diceValue) {
+            $group = ChallengeGroup::findOrFail($groupId);
+            abort_if($group->challenge_session_id !== $session->id, 403);
 
-        $challengeQuestion->markAsUsed($groupId, $diceValue, 0, 'wrong');
+            $challengeQuestion->markAsUsed($groupId, $diceValue, 0, 'wrong');
+            $this->advanceCurrentTurn($session, $groupId);
+        });
+    }
+
+    private function advanceCurrentTurn(ChallengeSession $session, int $answeredGroupId): void
+    {
+        $groups = $session->groups()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id']);
+
+        if ($groups->isEmpty()) {
+            $session->update(['current_turn_group_id' => null]);
+            return;
+        }
+
+        $answeredIndex = $groups->search(fn (ChallengeGroup $group) => $group->id === $answeredGroupId);
+        $nextIndex = $answeredIndex === false ? 0 : ($answeredIndex + 1) % $groups->count();
+
+        $session->update([
+            'current_turn_group_id' => $groups[$nextIndex]->id,
+        ]);
     }
 
     /**

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
-import '../../challenge/screens/challenge_arena_screen.dart';
+import '../../challenge/screens/saved_challenges_screen.dart';
 import '../../challenge/providers/challenge_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -42,8 +43,34 @@ class _SetupGroupsScreenState extends ConsumerState<SetupGroupsScreen> {
     });
   }
 
-  void _removeGroup(int index) {
+  Future<void> _removeGroup(int index) async {
     if (_controllers.length <= 2) return;
+    final name = _controllers[index].text.trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف المجموعة'),
+        content: Text(
+          name.isEmpty
+              ? 'هل تريد حذف هذه المجموعة؟'
+              : 'هل تريد حذف المجموعة: $name؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
     setState(() {
       _controllers[index].dispose();
       _controllers.removeAt(index);
@@ -75,14 +102,24 @@ class _SetupGroupsScreenState extends ConsumerState<SetupGroupsScreen> {
           );
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ChallengeArenaScreen()),
+        ref.invalidate(savedChallengesProvider);
+        final navigator = Navigator.of(context);
+        navigator.popUntil((route) => route.isFirst);
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const SavedChallengesScreen()),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في إنشاء التحدي: $e')),
+          SnackBar(
+            content: Text(
+              AppError.message(
+                e,
+                fallback: 'تعذر إنشاء المنافسة. حاول مجدداً.',
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -202,7 +239,7 @@ class _SetupGroupsScreenState extends ConsumerState<SetupGroupsScreen> {
                       )
                     : const Icon(Icons.play_arrow_rounded, size: 28),
                 label: Text(
-                  _isCreating ? 'جارٍ تجهيز الساحة...' : 'ابدأ التحدي',
+                  _isCreating ? 'جارٍ إنشاء المنافسة...' : 'إنشاء المنافسة',
                   style: const TextStyle(fontSize: 18),
                 ),
               ),

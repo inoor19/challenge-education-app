@@ -14,11 +14,12 @@ class EntitlementService
     {
         return QuestionPackage::query()
             ->active()
-            ->with(['grade', 'subject', 'chapter', 'lesson'])
+            ->with(['grade', 'subject', 'chapter', 'lesson', 'chapters.subjectPart', 'lessons.chapter'])
             ->withCount('questions')
             ->get()
             ->map(function (QuestionPackage $package) use ($user) {
                 $package->setAttribute('is_owned', $this->ownsPackage($user, $package));
+
                 return $package;
             });
     }
@@ -31,9 +32,27 @@ class EntitlementService
                 $query->where('is_free', true)
                     ->orWhereHas('teacherPackages', fn (Builder $teacherPackageQuery) => $teacherPackageQuery->where('user_id', $user->id));
             })
-            ->with(['grade', 'subject', 'chapter', 'lesson'])
+            ->with(['grade', 'subject', 'chapter', 'lesson', 'chapters.subjectPart', 'lessons.chapter'])
             ->withCount('questions')
             ->get();
+    }
+
+    public function suggestedPackages(User $user, ?int $gradeId = null, ?int $subjectId = null): Collection
+    {
+        return QuestionPackage::query()
+            ->active()
+            ->where('is_free', false)
+            ->when($gradeId !== null, fn (Builder $query) => $query->where('grade_id', $gradeId))
+            ->when($subjectId !== null, fn (Builder $query) => $query->where('subject_id', $subjectId))
+            ->whereDoesntHave('teacherPackages', fn (Builder $query) => $query->where('user_id', $user->id))
+            ->with(['grade', 'subject', 'chapter', 'lesson', 'chapters.subjectPart', 'lessons.chapter'])
+            ->withCount('questions')
+            ->get()
+            ->map(function (QuestionPackage $package) {
+                $package->setAttribute('is_owned', false);
+
+                return $package;
+            });
     }
 
     public function ownsPackage(User $user, QuestionPackage $package): bool
@@ -64,7 +83,7 @@ class EntitlementService
                 })->orWhere(function (Builder $privateQuery) use ($user) {
                     $privateQuery->where('visibility', 'private')
                         ->where('created_by_user_id', $user->id);
-                    });
+                });
             })
             ->pluck('questions.id');
     }

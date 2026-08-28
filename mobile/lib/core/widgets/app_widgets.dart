@@ -2,6 +2,30 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+class AppLogo extends StatelessWidget {
+  final double size;
+  final EdgeInsetsGeometry padding;
+
+  const AppLogo({
+    super.key,
+    required this.size,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Image.asset(
+        'assets/images/logo.png',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
 class ChallengeBackground extends StatelessWidget {
   final Widget child;
   final bool dark;

@@ -64,7 +64,9 @@ class PurchaseController extends Controller
 
         return response()->json([
             'purchase' => new StorePurchaseResource($purchase),
-            'package' => new QuestionPackageResource($package->fresh()->load(['grade', 'subject', 'chapter', 'lesson'])->loadCount('questions')),
+            'package' => new QuestionPackageResource($package->fresh()
+                ->load(['grade', 'subject', 'chapter', 'lesson', 'chapters.subjectPart', 'lessons.chapter'])
+                ->loadCount('questions')),
             'owned_packages' => QuestionPackageResource::collection($this->entitlements->ownedPackages($request->user())),
         ]);
     }

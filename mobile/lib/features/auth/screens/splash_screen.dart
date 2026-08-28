@@ -170,15 +170,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.emoji_events_rounded,
-                color: AppTheme.accent,
-                size: 62,
+              child: const AppLogo(
+                size: 88,
+                padding: EdgeInsets.all(12),
               ),
             ),
             const SizedBox(height: 26),
             const Text(
-              'ساحة التحدي التعليمي',
+              'ساحة التنافس',
               style: TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 29,
@@ -309,15 +308,14 @@ class _BrandMark extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppTheme.border),
           ),
-          child: const Icon(
-            Icons.emoji_events_rounded,
-            color: AppTheme.accent,
-            size: 24,
+          child: const AppLogo(
+            size: 32,
+            padding: EdgeInsets.all(5),
           ),
         ),
         const SizedBox(width: 10),
         const Text(
-          'ساحة التحدي',
+          'ساحة التنافس',
           style: TextStyle(
             fontFamily: 'Tajawal',
             color: AppTheme.textDark,

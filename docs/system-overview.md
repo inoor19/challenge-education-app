@@ -1,8 +1,8 @@
-# System Overview — ساحة التحدي التعليمي
+# System Overview — ساحة التنافس
 
 ## Idea
 
-**ساحة التحدي التعليمي** is a classroom-based educational competition platform.
+**ساحة التنافس** is a classroom-based educational competition platform.
 Teachers use a Flutter tablet/phone app to run live quiz challenges between student groups.
 Questions are pre-loaded through a Laravel admin panel or imported from Excel.
 
@@ -39,7 +39,7 @@ Questions are pre-loaded through a Laravel admin panel or imported from Excel.
 5. Select one or more الدروس (multi-select)
 6. Set up groups (minimum 2)
 7. Configure timer (default 60s, can disable)
-8. Enter ساحة التحدي
+8. Enter ساحة التنافس
 9. Roll dice (نقاط الحظ) — returns 1, 2, or 3
 10. Tap a question number from the grid
 11. Read the question to students

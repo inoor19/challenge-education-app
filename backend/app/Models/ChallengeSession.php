@@ -15,11 +15,13 @@ class ChallengeSession extends Model
     protected $fillable = [
         'teacher_id',
         'grade_id',
+        'grade_section',
         'subject_id',
         'subject_part_id',
         'timer_seconds',
         'timer_enabled',
         'status',
+        'current_turn_group_id',
         'started_at',
         'ended_at',
     ];
@@ -27,6 +29,7 @@ class ChallengeSession extends Model
     protected $casts = [
         'timer_enabled' => 'boolean',
         'timer_seconds' => 'integer',
+        'current_turn_group_id' => 'integer',
         'started_at' => 'datetime',
         'ended_at' => 'datetime',
     ];
@@ -49,6 +52,11 @@ class ChallengeSession extends Model
     public function subjectPart(): BelongsTo
     {
         return $this->belongsTo(SubjectPart::class);
+    }
+
+    public function currentTurnGroup(): BelongsTo
+    {
+        return $this->belongsTo(ChallengeGroup::class, 'current_turn_group_id');
     }
 
     public function chapters(): BelongsToMany

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes — ساحة التحدي التعليمي
+| API Routes — ساحة التنافس
 |--------------------------------------------------------------------------
 */
 
@@ -51,6 +51,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/teacher/subjects/{subject}', [TeacherContentController::class, 'updateSubject']);
     Route::delete('/teacher/subjects/{subject}', [TeacherContentController::class, 'destroySubject']);
 
+    Route::post('/teacher/subject-parts', [TeacherContentController::class, 'storeSubjectPart']);
+
     Route::get('/teacher/chapters', [TeacherContentController::class, 'chapters']);
     Route::post('/teacher/chapters', [TeacherContentController::class, 'storeChapter']);
     Route::patch('/teacher/chapters/{chapter}', [TeacherContentController::class, 'updateChapter']);
@@ -72,12 +74,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Commercial packages and store purchases
     Route::get('/packages', [PackageController::class, 'index']);
     Route::get('/packages/owned', [PackageController::class, 'owned']);
+    Route::get('/packages/suggestions', [PackageController::class, 'suggestions']);
     Route::post('/purchases/verify', [PurchaseController::class, 'verify']);
     Route::post('/purchases/restore', [PurchaseController::class, 'restore']);
 
     // Challenge sessions
+    Route::get('/challenges', [ChallengeController::class, 'index']);
     Route::post('/challenges', [ChallengeController::class, 'store']);
     Route::get('/challenges/{challenge}', [ChallengeController::class, 'show']);
+    Route::patch('/challenges/{challenge}', [ChallengeController::class, 'update']);
+    Route::delete('/challenges/{challenge}', [ChallengeController::class, 'destroy']);
+    Route::post('/challenges/{challenge}/restart', [ChallengeController::class, 'restart']);
     Route::post('/challenges/{challenge}/groups', [ChallengeController::class, 'addGroup']);
     Route::post('/challenges/{challenge}/roll-dice', [ChallengeController::class, 'rollDice']);
     Route::post('/challenges/{challenge}/questions/{question}/mark-correct', [ChallengeController::class, 'markCorrect']);

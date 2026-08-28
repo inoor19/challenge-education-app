@@ -20,7 +20,13 @@ class SubjectController extends Controller
 
         $chapters = $subject->chapters()
             ->active()
-            ->whereHas('lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+            ->where(function ($query) use ($request, $questionIds) {
+                $query->whereHas('lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+                    ->orWhere(function ($query) use ($request) {
+                        $query->where('visibility', 'private')
+                            ->where('created_by_user_id', $request->user()->id);
+                    });
+            })
             ->with('subjectPart')
             ->get();
 

@@ -25,7 +25,7 @@ class ManualScoreRequest extends FormRequest
     {
         return [
             'type.required' => 'نوع العملية مطلوب.',
-            'type.in' => 'نوع العملية يجب أن يكون: add أو subtract أو correction.',
+            'type.in' => 'نوع تعديل النقاط غير صحيح.',
             'points.required_if' => 'عدد النقاط مطلوب.',
             'score.required_if' => 'النقاط الجديدة مطلوبة لعملية التصحيح.',
         ];

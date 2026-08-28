@@ -24,7 +24,13 @@ class LessonController extends Controller
 
         $lessons = Lesson::whereIn('chapter_id', $request->chapter_ids)
             ->active()
-            ->whereHas('questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+            ->where(function ($query) use ($request, $questionIds) {
+                $query->whereHas('questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+                    ->orWhere(function ($query) use ($request) {
+                        $query->where('visibility', 'private')
+                            ->where('created_by_user_id', $request->user()->id);
+                    });
+            })
             ->orderBy('chapter_id')
             ->orderBy('sort_order')
             ->get();

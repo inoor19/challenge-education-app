@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
@@ -44,7 +45,10 @@ class _SelectQuestionsScreenState extends ConsumerState<SelectQuestionsScreen> {
               error: (e, _) => AppStateView(
                 icon: Icons.cloud_off_rounded,
                 title: 'تعذر تحميل الأسئلة',
-                message: e.toString(),
+                message: AppError.message(
+                  e,
+                  fallback: 'تعذر تحميل الأسئلة. حاول مجدداً.',
+                ),
               ),
               data: (questions) {
                 if (_initializedLessonKey != lessonKey) {
@@ -63,7 +67,7 @@ class _SelectQuestionsScreenState extends ConsumerState<SelectQuestionsScreen> {
                     icon: Icons.quiz_rounded,
                     title: 'لا توجد أسئلة',
                     message:
-                        'اختر دروساً أخرى أو أضف أسئلة من إدارة المحتوى داخل التطبيق.',
+                        'اختر دروساً أخرى أو أضف أسئلة من صفحة إعداد المنافسة.',
                   );
                 }
 

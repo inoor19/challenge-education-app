@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../providers/challenge_provider.dart';
+import '../services/feedback_effects_service.dart';
 
 class QuestionDialog extends ConsumerStatefulWidget {
   const QuestionDialog({super.key});
@@ -14,14 +19,46 @@ class QuestionDialog extends ConsumerStatefulWidget {
 }
 
 class _QuestionDialogState extends ConsumerState<QuestionDialog> {
+  static const _mutePrefsKey = 'challenge_feedback_muted';
+
+  final FeedbackEffectsService _effects = FeedbackEffectsService();
   String? _selectedAnswer;
   String? _answerResult;
+  ChallengeQuestionItem? _questionSnapshot;
+  ChallengeGroup? _answeringGroupSnapshot;
+  int? _diceValueSnapshot;
+  bool _soundMuted = true;
   bool _isSubmitting = false;
+  bool _canClose = false;
+  bool _timeoutHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = ref.read(challengeProvider);
+    _questionSnapshot = state.activeQuestion;
+    _answeringGroupSnapshot = state.currentGroup;
+    _diceValueSnapshot = state.currentDiceValue;
+    _loadSoundPreference();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_effects.dispose());
+    super.dispose();
+  }
+
+  Future<void> _loadSoundPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() => _soundMuted = prefs.getBool(_mutePrefsKey) ?? false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(challengeProvider);
-    final activeQuestion = state.activeQuestion;
+    final activeQuestion = _questionSnapshot ?? state.activeQuestion;
 
     if (activeQuestion == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -31,11 +68,41 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
     }
 
     final question = activeQuestion.question!;
-    final currentGroup = state.currentGroup;
-    final diceValue = state.currentDiceValue;
+    final currentGroup = _answeringGroupSnapshot ?? state.currentGroup;
+    final diceValue = _diceValueSnapshot ?? state.currentDiceValue;
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 650;
-    final canAnswer = diceValue != null && currentGroup != null;
+    final canAnswer =
+        diceValue != null && currentGroup != null && _answerResult == null;
+
+    final timerEnabled = state.session?.timerEnabled == true;
+    final timerRemaining = state.timerRemaining;
+
+    ref.listen<int>(
+      challengeProvider.select((s) => s.timerRemaining),
+      (previous, next) {
+        final current = ref.read(challengeProvider);
+        final isTick = previous != null && next < previous && next > 0;
+        final canPlay = current.session?.timerEnabled == true &&
+            current.timerRunning &&
+            current.activeQuestion != null &&
+            _answerResult == null &&
+            !_canClose;
+
+        if (isTick && canPlay) {
+          unawaited(_effects.playTimerTick(muted: _soundMuted));
+        }
+      },
+    );
+
+    if (timerEnabled &&
+        canAnswer &&
+        timerRemaining <= 0 &&
+        !_timeoutHandled &&
+        !_isSubmitting) {
+      _timeoutHandled = true;
+      Future.microtask(_handleTimeout);
+    }
 
     return Dialog(
       elevation: 0,
@@ -92,6 +159,8 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
                       _QuestionHeader(
                         sequenceNumber: activeQuestion.sequenceNumber,
                         question: question,
+                        timerEnabled: timerEnabled,
+                        timerRemaining: timerRemaining,
                       ),
                       const SizedBox(height: 16),
                       _QuestionCard(questionText: question.questionText),
@@ -129,7 +198,9 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
                       ],
                       if (_answerResult != null) ...[
                         const SizedBox(height: 14),
-                        _AnswerResultBanner(result: _answerResult!),
+                        _AnswerResultBanner(
+                          result: _answerResult!,
+                        ),
                       ],
                       if (question.questionType == 'text') ...[
                         const SizedBox(height: 18),
@@ -142,6 +213,12 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
                     ],
                   ),
                 ),
+                if (_canClose)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: _QuestionCloseButton(onPressed: _closeDialog),
+                  ),
               ],
             ),
           ),
@@ -151,7 +228,7 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
   }
 
   Future<void> _selectObjectiveAnswer(String answer) async {
-    if (_isSubmitting) return;
+    if (_isSubmitting || _answerResult != null) return;
 
     final question = ref.read(challengeProvider).activeQuestion?.question;
     if (question == null) return;
@@ -172,6 +249,7 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
 
   Future<void> _answer(String result) async {
     if (_isSubmitting && _answerResult == null) return;
+    if (_canClose) return;
     if (!_isSubmitting) {
       setState(() {
         _answerResult = result;
@@ -179,27 +257,124 @@ class _QuestionDialogState extends ConsumerState<QuestionDialog> {
       });
     }
 
-    final notifier = ref.read(challengeProvider.notifier);
-    if (result == 'correct') {
-      await notifier.markCorrect();
-    } else {
-      await notifier.markWrong();
+    try {
+      final notifier = ref.read(challengeProvider.notifier);
+      if (result == 'correct') {
+        await notifier.markCorrect(_answeringGroupSnapshot?.id);
+      } else {
+        await notifier.markWrong(_answeringGroupSnapshot?.id);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _canClose = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppError.message(
+              e,
+              fallback: 'تعذر تسجيل الإجابة. حاول مجدداً.',
+            ),
+          ),
+        ),
+      );
+      setState(() {
+        _answerResult = null;
+        _isSubmitting = false;
+      });
     }
+  }
+
+  void _closeDialog() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    ref.read(challengeProvider.notifier).closeQuestion();
   }
 
   bool _answersMatch(String selected, String correct) {
     String normalize(String value) => value.trim().toLowerCase();
     return normalize(selected) == normalize(correct);
   }
+
+  Future<void> _handleTimeout() async {
+    if (!mounted) return;
+    if (_canClose || _answerResult != null) return;
+
+    setState(() {
+      _answerResult = 'wrong';
+      _isSubmitting = true;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('انتهى الوقت')),
+    );
+
+    try {
+      await ref
+          .read(challengeProvider.notifier)
+          .markWrong(_answeringGroupSnapshot?.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppError.message(
+                e,
+                fallback: 'تعذر تسجيل انتهاء الوقت. حاول مجدداً.',
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _canClose = true;
+        });
+      }
+    }
+  }
+}
+
+class _QuestionCloseButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _QuestionCloseButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'إغلاق السؤال',
+      child: IconButton.filled(
+        onPressed: onPressed,
+        icon: const Icon(Icons.close_rounded),
+        style: IconButton.styleFrom(
+          backgroundColor: AppTheme.surface,
+          foregroundColor: AppTheme.textDark,
+          side: const BorderSide(color: AppTheme.border),
+        ),
+      ),
+    );
+  }
 }
 
 class _QuestionHeader extends StatelessWidget {
   final int sequenceNumber;
   final Question question;
+  final bool timerEnabled;
+  final int timerRemaining;
 
   const _QuestionHeader({
     required this.sequenceNumber,
     required this.question,
+    required this.timerEnabled,
+    required this.timerRemaining,
   });
 
   @override
@@ -245,7 +420,50 @@ class _QuestionHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (timerEnabled)
+          _TimerPillInline(
+            seconds: timerRemaining,
+            isDanger: timerRemaining <= 10,
+          ),
       ],
+    );
+  }
+}
+
+class _TimerPillInline extends StatelessWidget {
+  final int seconds;
+  final bool isDanger;
+
+  const _TimerPillInline({
+    required this.seconds,
+    required this.isDanger,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDanger ? AppTheme.danger : AppTheme.success;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_rounded, size: 18, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$seconds ث',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -523,13 +741,20 @@ class _AnswerChoice extends StatelessWidget {
         : resultColor;
 
     return InkWell(
+      key: ValueKey('answer-choice-$label'),
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.surfaceAlt : AppTheme.background,
+          color: selected && result == 'correct'
+              ? AppTheme.success.withValues(alpha: 0.18)
+              : selected && result == 'wrong'
+                  ? AppTheme.danger.withValues(alpha: 0.14)
+                  : selected
+                      ? AppTheme.surfaceAlt
+                      : AppTheme.background,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: borderColor, width: selected ? 1.6 : 1),
         ),
@@ -588,7 +813,9 @@ class _AnswerChoice extends StatelessWidget {
 class _AnswerResultBanner extends StatelessWidget {
   final String result;
 
-  const _AnswerResultBanner({required this.result});
+  const _AnswerResultBanner({
+    required this.result,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -602,20 +829,26 @@ class _AnswerResultBanner extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.38)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: color,
-            size: 23,
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(
+              correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
+              color: color,
+              size: 23,
+            ),
           ),
           const SizedBox(width: 10),
-          Text(
-            correct ? 'إجابة صحيحة' : 'إجابة خاطئة',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              color: color,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
+          Expanded(
+            child: Text(
+              correct ? 'إجابة صحيحة' : 'إجابة خاطئة',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                color: color,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -641,11 +874,11 @@ class _AnswerActions extends StatelessWidget {
     final actions = [
       Expanded(
         child: ElevatedButton.icon(
-          onPressed: enabled ? onWrong : null,
-          icon: const Icon(Icons.close_rounded),
-          label: const Text('خاطئة'),
+          onPressed: enabled ? onCorrect : null,
+          icon: const Icon(Icons.check_rounded),
+          label: const Text('صحيحة'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.danger,
+            backgroundColor: AppTheme.success,
             foregroundColor: Colors.white,
             minimumSize: const Size(0, 52),
           ),
@@ -654,11 +887,11 @@ class _AnswerActions extends StatelessWidget {
       SizedBox(width: isCompact ? 0 : 12, height: isCompact ? 10 : 0),
       Expanded(
         child: ElevatedButton.icon(
-          onPressed: enabled ? onCorrect : null,
-          icon: const Icon(Icons.check_rounded),
-          label: const Text('صحيحة'),
+          onPressed: enabled ? onWrong : null,
+          icon: const Icon(Icons.close_rounded),
+          label: const Text('خاطئة'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.success,
+            backgroundColor: AppTheme.danger,
             foregroundColor: Colors.white,
             minimumSize: const Size(0, 52),
           ),

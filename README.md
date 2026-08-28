@@ -1,6 +1,6 @@
-# ساحة التحدي التعليمي — Educational Challenge Arena
+# ساحة التنافس
 
-A complete monorepo for a classroom educational competition platform.
+مشروع متكامل لمنصة منافسات تعليمية داخل الصف.
 
 ---
 
@@ -8,9 +8,9 @@ A complete monorepo for a classroom educational competition platform.
 
 ```
 challenge-education-app/
-├── backend/          # Laravel API + Filament Admin Dashboard
-├── mobile/           # Flutter application (Android, iOS, Tablet)
-├── docs/             # System documentation
+├── backend/          # واجهة API ولوحة إدارة Filament
+├── mobile/           # تطبيق Flutter لأندرويد و iOS والتابلت
+├── docs/             # توثيق النظام
 └── README.md
 ```
 
@@ -66,11 +66,11 @@ php artisan serve
 
 Access the admin panel at: `http://localhost:8000/admin`
 
-Admin credentials (seeded):
+بيانات حساب المدير الافتراضي:
 - Email: `admin@example.com`
 - Password: `password`
 
-Teacher credentials (seeded):
+بيانات حساب المعلم الافتراضي:
 - Email: `teacher@example.com`
 - Password: `password`
 
@@ -100,7 +100,7 @@ flutter build ios --release
 
 ---
 
-## Educational Hierarchy
+## التسلسل التعليمي
 
 ```
 الصف الدراسي (Grade)
@@ -114,11 +114,11 @@ flutter build ios --release
 
 ## Features
 
-- **Teacher Flow**: Login → Select Grade → Select Subject → Select Chapter(s) → Select Lesson(s) → Challenge Arena
-- **Challenge Arena**: Group management, dice rolling (نقاط الحظ), numbered question grid, 60-second timer
-- **Scoring**: Easy questions = dice value, Hard questions = dice × 2; manual add/subtract supported
-- **Admin Panel**: Full CRUD for all educational content, Excel import, teacher management
-- **API**: RESTful API secured with Laravel Sanctum
+- **مسار المعلم**: تسجيل الدخول → اختيار الصف → اختيار المادة → اختيار الفصول → اختيار الدروس → ساحة التنافس
+- **ساحة التنافس**: إدارة الفرق، نقاط الحظ، شبكة الأسئلة المرقمة، ومؤقت 60 ثانية
+- **التسجيل**: الأسئلة السهلة = قيمة النرد، والأسئلة الصعبة = قيمة النرد × 2، مع دعم التعديل اليدوي
+- **لوحة الإدارة**: إدارة المحتوى التعليمي، استيراد Excel، وإدارة المعلمين
+- **API**: واجهة REST مؤمنة عبر Laravel Sanctum
 
 ---
 

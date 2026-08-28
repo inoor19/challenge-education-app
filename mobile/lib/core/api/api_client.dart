@@ -134,6 +134,11 @@ class ApiClient {
 
   // ─── Challenge ────────────────────────────────────────────────────────────
 
+  Future<List<dynamic>> getChallenges() async {
+    final resp = await _dio.get('/challenges');
+    return resp.data as List<dynamic>;
+  }
+
   Future<Map<String, dynamic>> createChallenge(
       Map<String, dynamic> data) async {
     final resp = await _dio.post('/challenges', data: data);
@@ -142,6 +147,23 @@ class ApiClient {
 
   Future<Map<String, dynamic>> getChallenge(int id) async {
     final resp = await _dio.get('/challenges/$id');
+    return resp.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateChallenge(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    final resp = await _dio.patch('/challenges/$id', data: data);
+    return resp.data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteChallenge(int id) async {
+    await _dio.delete('/challenges/$id');
+  }
+
+  Future<Map<String, dynamic>> restartChallenge(int id) async {
+    final resp = await _dio.post('/challenges/$id/restart');
     return resp.data as Map<String, dynamic>;
   }
 
@@ -221,6 +243,17 @@ class ApiClient {
     return resp.data as List<dynamic>;
   }
 
+  Future<List<dynamic>> getPackageSuggestions({
+    int? gradeId,
+    int? subjectId,
+  }) async {
+    final resp = await _dio.get('/packages/suggestions', queryParameters: {
+      if (gradeId != null) 'grade_id': gradeId,
+      if (subjectId != null) 'subject_id': subjectId,
+    });
+    return resp.data as List<dynamic>;
+  }
+
   Future<Map<String, dynamic>> verifyPurchase(
     Map<String, dynamic> payload,
   ) async {
@@ -250,6 +283,10 @@ class ApiClient {
     return resp.data as Map<String, dynamic>;
   }
 
+  Future<void> deleteTeacherGrade(int gradeId) async {
+    await _dio.delete('/teacher/grades/$gradeId');
+  }
+
   Future<List<dynamic>> getTeacherSubjects({int? gradeId}) async {
     final resp = await _dio.get('/teacher/subjects',
         queryParameters: {if (gradeId != null) 'grade_id': gradeId});
@@ -259,6 +296,12 @@ class ApiClient {
   Future<Map<String, dynamic>> createTeacherSubject(
       Map<String, dynamic> data) async {
     final resp = await _dio.post('/teacher/subjects', data: data);
+    return resp.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> createTeacherSubjectPart(
+      Map<String, dynamic> data) async {
+    final resp = await _dio.post('/teacher/subject-parts', data: data);
     return resp.data as Map<String, dynamic>;
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/providers/api_provider.dart';
 import '../services/iap_service.dart';
@@ -66,7 +67,10 @@ class PackageNotifier extends StateNotifier<PackageState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'تعذر تحميل الحزم. تحقق من الاتصال.',
+        error: AppError.message(
+          e,
+          fallback: 'تعذر تحميل الحزم. حاول مجدداً.',
+        ),
       );
     }
   }
@@ -77,7 +81,13 @@ class PackageNotifier extends StateNotifier<PackageState> {
     try {
       await _iap.buyPackage(package);
     } catch (e) {
-      state = state.copyWith(isPurchasing: false, error: e.toString());
+      state = state.copyWith(
+        isPurchasing: false,
+        error: AppError.message(
+          e,
+          fallback: 'تعذر بدء عملية الشراء. حاول مجدداً.',
+        ),
+      );
     }
   }
 
@@ -95,7 +105,13 @@ class PackageNotifier extends StateNotifier<PackageState> {
         successMessage: 'تم طلب استعادة المشتريات.',
       );
     } catch (e) {
-      state = state.copyWith(isPurchasing: false, error: e.toString());
+      state = state.copyWith(
+        isPurchasing: false,
+        error: AppError.message(
+          e,
+          fallback: 'تعذر استعادة المشتريات. حاول مجدداً.',
+        ),
+      );
     }
   }
 
@@ -121,13 +137,16 @@ class PackageNotifier extends StateNotifier<PackageState> {
         } catch (e) {
           state = state.copyWith(
             isPurchasing: false,
-            error: 'تعذر التحقق من الشراء على الخادم.',
+            error: AppError.message(
+              e,
+              fallback: 'تعذر التحقق من الشراء. حاول مجدداً.',
+            ),
           );
         }
       } else if (purchase.status == PurchaseStatus.error) {
         state = state.copyWith(
           isPurchasing: false,
-          error: purchase.error?.message ?? 'فشلت عملية الشراء.',
+          error: 'فشلت عملية الشراء. حاول مجدداً أو تحقق من إعدادات المتجر.',
         );
       } else if (purchase.status == PurchaseStatus.canceled) {
         state = state.copyWith(isPurchasing: false);
@@ -161,6 +180,8 @@ class PackageNotifier extends StateNotifier<PackageState> {
                 subject: package.subject,
                 chapter: package.chapter,
                 lesson: package.lesson,
+                chapters: package.chapters,
+                lessons: package.lessons,
                 isFree: package.isFree,
                 price: package.price,
                 platformProductId: package.platformProductId,

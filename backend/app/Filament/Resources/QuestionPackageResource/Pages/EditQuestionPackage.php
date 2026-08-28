@@ -14,4 +14,14 @@ class EditQuestionPackage extends EditRecord
     {
         return [Actions\DeleteAction::make()->label('حذف')];
     }
+
+    protected function beforeSave(): void
+    {
+        QuestionPackageResource::validateContentSelection($this->data);
+    }
+
+    protected function afterSave(): void
+    {
+        QuestionPackageResource::syncLegacyContent($this->record, $this->data);
+    }
 }

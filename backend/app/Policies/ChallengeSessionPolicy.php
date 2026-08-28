@@ -14,7 +14,7 @@ class ChallengeSessionPolicy
 
     public function update(User $user, ChallengeSession $session): bool
     {
-        return $session->teacher_id === $user->id && $session->isActive();
+        return $session->teacher_id === $user->id && $session->status !== 'cancelled';
     }
 
     public function delete(User $user, ChallengeSession $session): bool

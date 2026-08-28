@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\GradeResource;
 use App\Http\Resources\SubjectResource;
 use App\Models\Grade;
+use App\Models\QuestionPackage;
 use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,9 +18,21 @@ class GradeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $questionIds = $this->entitlements->accessibleQuestionIds($request->user());
+        $packageGradeIds = QuestionPackage::query()
+            ->active()
+            ->whereNotNull('grade_id')
+            ->pluck('grade_id');
 
         $grades = Grade::active()
-            ->whereHas('subjects.chapters.lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+            ->where(function ($query) use ($request, $questionIds, $packageGradeIds) {
+                $query->where(function ($query) use ($questionIds, $packageGradeIds) {
+                    $query->whereHas('subjects.chapters.lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+                        ->orWhereIn('id', $packageGradeIds);
+                })->orWhere(function ($query) use ($request) {
+                    $query->where('visibility', 'private')
+                        ->where('created_by_user_id', $request->user()->id);
+                });
+            })
             ->get();
 
         return response()->json(GradeResource::collection($grades));
@@ -31,7 +44,13 @@ class GradeController extends Controller
 
         $subjects = $grade->subjects()
             ->active()
-            ->whereHas('chapters.lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+            ->where(function ($query) use ($request, $questionIds) {
+                $query->whereHas('chapters.lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+                    ->orWhere(function ($query) use ($request) {
+                        $query->where('visibility', 'private')
+                            ->where('created_by_user_id', $request->user()->id);
+                    });
+            })
             ->get();
 
         return response()->json(SubjectResource::collection($subjects));

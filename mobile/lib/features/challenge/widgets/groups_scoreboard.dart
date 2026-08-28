@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -210,13 +211,28 @@ void _showManualScoreDialog(
           child: const Text('إلغاء'),
         ),
         ElevatedButton.icon(
-          onPressed: () {
+          onPressed: () async {
             final points = int.tryParse(pointsController.text) ?? 0;
             if (points > 0) {
-              ref
-                  .read(challengeProvider.notifier)
-                  .manualSubtract(group.id, points);
-              Navigator.pop(ctx);
+              try {
+                await ref
+                    .read(challengeProvider.notifier)
+                    .manualSubtract(group.id, points);
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppError.message(
+                          e,
+                          fallback: 'تعذر خصم النقاط. حاول مجدداً.',
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              }
             }
           },
           icon: const Icon(Icons.remove),
@@ -224,11 +240,28 @@ void _showManualScoreDialog(
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
         ),
         ElevatedButton.icon(
-          onPressed: () {
+          onPressed: () async {
             final points = int.tryParse(pointsController.text) ?? 0;
             if (points > 0) {
-              ref.read(challengeProvider.notifier).manualAdd(group.id, points);
-              Navigator.pop(ctx);
+              try {
+                await ref
+                    .read(challengeProvider.notifier)
+                    .manualAdd(group.id, points);
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppError.message(
+                          e,
+                          fallback: 'تعذر إضافة النقاط. حاول مجدداً.',
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              }
             }
           },
           icon: const Icon(Icons.add),

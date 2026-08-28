@@ -12,12 +12,10 @@
 # Install dependencies
 flutter pub get
 
-# Configure backend URL
+# Backend URL (default: https://competitionarena.me/api)
 # Edit: lib/core/config/app_config.dart
-# Change apiBaseUrl to your backend address
-# - Android emulator: http://10.0.2.2:8000/api
-# - Real device (same network): http://<your-machine-ip>:8000/api
-# - iOS simulator: http://localhost:8000/api
+# Or override at build time:
+# flutter run --dart-define=API_BASE_URL=https://competitionarena.me/api
 
 # Run on connected device/emulator
 flutter run

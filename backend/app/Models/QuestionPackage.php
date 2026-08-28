@@ -54,9 +54,22 @@ class QuestionPackage extends Model
         return $this->belongsTo(Lesson::class);
     }
 
+    public function chapters(): BelongsToMany
+    {
+        return $this->belongsToMany(Chapter::class, 'question_package_chapters')
+            ->withTimestamps();
+    }
+
+    public function lessons(): BelongsToMany
+    {
+        return $this->belongsToMany(Lesson::class, 'question_package_lessons')
+            ->withTimestamps();
+    }
+
     public function questions(): BelongsToMany
     {
-        return $this->belongsToMany(Question::class, 'question_package_items');
+        return $this->belongsToMany(Question::class, 'question_package_items')
+            ->withTimestamps();
     }
 
     public function teacherPackages(): HasMany

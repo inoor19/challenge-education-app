@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
@@ -32,14 +33,17 @@ class SelectLessonsScreen extends ConsumerWidget {
               error: (e, _) => AppStateView(
                 icon: Icons.cloud_off_rounded,
                 title: 'تعذر تحميل الدروس',
-                message: e.toString(),
+                message: AppError.message(
+                  e,
+                  fallback: 'تعذر تحميل الدروس. حاول مجدداً.',
+                ),
               ),
               data: (lessons) => lessons.isEmpty
                   ? const AppStateView(
                       icon: Icons.assignment_rounded,
                       title: 'لا توجد دروس',
                       message:
-                          'اختر فصولاً أخرى أو أضف دروساً من إدارة المحتوى داخل التطبيق.',
+                          'اختر فصولاً أخرى أو أضف دروساً من صفحة إعداد المنافسة.',
                     )
                   : Column(
                       children: [

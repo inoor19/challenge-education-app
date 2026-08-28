@@ -1,5 +1,5 @@
 class AppConfig {
-  static const String appName = 'ساحة التحدي التعليمي';
+  static const String appName = 'ساحة التنافس';
 
   static const String environment =
       String.fromEnvironment('APP_ENV', defaultValue: 'dev');
@@ -9,9 +9,9 @@ class AppConfig {
     if (override.isNotEmpty) return override;
 
     return switch (environment) {
-      'prod' => 'https://api.challenge-edu.example.com/api',
-      'staging' => 'https://staging-api.challenge-edu.example.com/api',
-      _ => 'http://10.0.2.2:8000/api',
+      'prod' => 'https://competitionarena.me/api',
+      'staging' => 'https://competitionarena.me/api',
+      _ => 'https://competitionarena.me/api',
     };
   }
 

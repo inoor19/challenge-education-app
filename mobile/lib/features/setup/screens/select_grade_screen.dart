@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
+import '../../../core/providers/api_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/login_screen.dart';
+import '../../challenge/screens/saved_challenges_screen.dart';
 import '../../packages/screens/packages_screen.dart';
-import '../../teacher_content/screens/manage_content_screen.dart';
 import '../providers/setup_provider.dart';
-import 'select_subject_screen.dart';
+import 'select_challenge_setup_screen.dart';
 
 class SelectGradeScreen extends ConsumerStatefulWidget {
   const SelectGradeScreen({super.key});
@@ -36,23 +38,94 @@ class _SelectGradeScreenState extends ConsumerState<SelectGradeScreen> {
     }
   }
 
-  void _openContent() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ManageContentScreen()),
-    );
-  }
-
   void _openPackages() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PackagesScreen()),
     );
   }
 
+  void _openChallenges() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SavedChallengesScreen()),
+    );
+  }
+
   void _selectGrade(Grade grade) {
     ref.read(setupProvider.notifier).selectGrade(grade);
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SelectSubjectScreen()),
+      MaterialPageRoute(builder: (_) => const SelectChallengeSetupScreen()),
     );
+  }
+
+  Future<void> _addGrade() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _NameInputDialog(
+        title: 'إضافة صف',
+        label: 'اسم الصف',
+      ),
+    );
+
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) return;
+
+    try {
+      await ref.read(apiClientProvider).createTeacherGrade({'name': trimmed});
+      ref.invalidate(gradesProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تمت إضافة الصف.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppError.message(e, fallback: 'تعذر إضافة الصف. حاول مجدداً.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteGrade(Grade grade) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الصف'),
+        content: Text('هل تريد حذف الصف: ${grade.name}؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiClientProvider).deleteTeacherGrade(grade.id);
+      ref.invalidate(gradesProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حذف الصف.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppError.message(e, fallback: 'تعذر حذف الصف. حاول مجدداً.'),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -80,12 +153,9 @@ class _SelectGradeScreenState extends ConsumerState<SelectGradeScreen> {
             ),
             SliverToBoxAdapter(
               child: _QuickActions(
-                onContent: _openContent,
                 onPackages: _openPackages,
+                onChallenges: _openChallenges,
               ),
-            ),
-            const SliverToBoxAdapter(
-              child: _SetupStepStrip(),
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -99,7 +169,7 @@ class _SelectGradeScreenState extends ConsumerState<SelectGradeScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'اختر الصف الدراسي',
+                      'اختر الصف الدراسي لإنشاء ساحة المنافسة',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w900,
                             color: AppTheme.textDark,
@@ -123,19 +193,19 @@ class _SelectGradeScreenState extends ConsumerState<SelectGradeScreen> {
               error: (error, _) => SliverFillRemaining(
                 hasScrollBody: false,
                 child: _ErrorWidget(
-                  message: error.toString(),
+                  message: AppError.message(
+                    error,
+                    fallback: 'تعذر تحميل الصفوف. حاول مجدداً.',
+                  ),
                   onRetry: () => ref.invalidate(gradesProvider),
                 ),
               ),
-              data: (grades) => grades.isEmpty
-                  ? const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _NoAvailableContent(),
-                    )
-                  : _GradeGrid(
-                      grades: grades,
-                      onSelect: _selectGrade,
-                    ),
+              data: (grades) => _GradeGrid(
+                grades: grades,
+                onSelect: _selectGrade,
+                onAdd: _addGrade,
+                onDelete: _deleteGrade,
+              ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
@@ -176,10 +246,9 @@ class _HomeHeader extends StatelessWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.emoji_events_rounded,
-                    color: AppTheme.accent,
-                    size: 30,
+                  child: const AppLogo(
+                    size: 40,
+                    padding: EdgeInsets.all(6),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -188,7 +257,7 @@ class _HomeHeader extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'ساحة التحدي التعليمي',
+                        'ساحة التنافس',
                         style: TextStyle(
                           fontFamily: 'Tajawal',
                           color: Colors.white,
@@ -231,7 +300,7 @@ class _HomeHeader extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'اختر الصف، جهّز المحتوى، وابدأ جولة تفاعلية لفريقك داخل الحصة.',
+              'اختر الصف، جهّز المحتوى، وابدأ جولة تفاعلية لطلابك داخل الحصة.',
               style: TextStyle(
                 fontFamily: 'Tajawal',
                 color: Colors.white.withValues(alpha: 0.86),
@@ -247,13 +316,64 @@ class _HomeHeader extends StatelessWidget {
   }
 }
 
+class _NameInputDialog extends StatefulWidget {
+  final String title;
+  final String label;
+
+  const _NameInputDialog({
+    required this.title,
+    required this.label,
+  });
+
+  @override
+  State<_NameInputDialog> createState() => _NameInputDialogState();
+}
+
+class _NameInputDialogState extends State<_NameInputDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _close(String? value) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        decoration: InputDecoration(labelText: widget.label),
+        autofocus: true,
+        onSubmitted: (value) => _close(value.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => _close(null),
+          child: const Text('إلغاء'),
+        ),
+        ElevatedButton(
+          onPressed: () => _close(_controller.text.trim()),
+          child: const Text('حفظ'),
+        ),
+      ],
+    );
+  }
+}
+
 class _QuickActions extends StatelessWidget {
-  final VoidCallback onContent;
   final VoidCallback onPackages;
+  final VoidCallback onChallenges;
 
   const _QuickActions({
-    required this.onContent,
     required this.onPackages,
+    required this.onChallenges,
   });
 
   @override
@@ -265,15 +385,15 @@ class _QuickActions extends StatelessWidget {
           final isWide = constraints.maxWidth > 680;
           final cards = [
             _ActionCard(
-              icon: Icons.create_new_folder_outlined,
-              title: 'إدارة المحتوى',
-              subtitle: 'أضف صفوفاً وأسئلة خاصة',
-              color: AppTheme.cardGold,
-              onTap: onContent,
+              icon: Icons.emoji_events_rounded,
+              title: 'قائمة ساحة المنافسات',
+              subtitle: 'أبدأ أو إستكمل تنافساً محفوظاً',
+              color: AppTheme.primary,
+              onTap: onChallenges,
             ),
             _ActionCard(
               icon: Icons.shopping_bag_outlined,
-              title: 'حزم الأسئلة',
+              title: 'شراء حزم الأسئلة',
               subtitle: 'استعرض الحزم المتاحة',
               color: AppTheme.cardClay,
               onTap: onPackages,
@@ -385,63 +505,18 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _SetupStepStrip extends StatelessWidget {
-  const _SetupStepStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.cardMint.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.cardMint.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        children: [
-          const StatusBadge(
-            label: '1 من 7',
-            color: AppTheme.primary,
-            icon: Icons.flag_rounded,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'خطوة البداية',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: AppTheme.textDark,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: const LinearProgressIndicator(
-                    value: 1 / 7,
-                    minHeight: 7,
-                    backgroundColor: Colors.white,
-                    valueColor: AlwaysStoppedAnimation(AppTheme.cardGold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _GradeGrid extends StatelessWidget {
   final List<Grade> grades;
   final ValueChanged<Grade> onSelect;
+  final VoidCallback onAdd;
+  final ValueChanged<Grade> onDelete;
 
-  const _GradeGrid({required this.grades, required this.onSelect});
+  const _GradeGrid({
+    required this.grades,
+    required this.onSelect,
+    required this.onAdd,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -457,14 +532,22 @@ class _GradeGrid extends StatelessWidget {
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate(
           (ctx, index) {
+            if (index >= grades.length) {
+              return _AddGradeCard(
+                index: index,
+                onTap: onAdd,
+              );
+            }
+
             final grade = grades[index];
             return _GradeCard(
               grade: grade,
               index: index,
               onTap: () => onSelect(grade),
+              onDelete: grade.isPrivate ? () => onDelete(grade) : null,
             );
           },
-          childCount: grades.length,
+          childCount: grades.length + 1,
         ),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossCount,
@@ -481,24 +564,19 @@ class _GradeCard extends StatelessWidget {
   final Grade grade;
   final int index;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   const _GradeCard({
     required this.grade,
     required this.index,
     required this.onTap,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = AppTheme.categoryPalette(index);
-    final icon = [
-      Icons.school_rounded,
-      Icons.auto_stories_rounded,
-      Icons.science_rounded,
-      Icons.explore_rounded,
-      Icons.emoji_objects_rounded,
-      Icons.local_library_rounded,
-    ][index % 6];
+    const icon = Icons.school_rounded;
 
     final accentColor = colors.last;
 
@@ -543,6 +621,13 @@ class _GradeCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  if (onDelete != null)
+                    IconButton(
+                      onPressed: onDelete,
+                      tooltip: 'حذف الصف',
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      color: AppTheme.danger,
+                    ),
                   Icon(
                     Icons.arrow_back_rounded,
                     color: accentColor,
@@ -580,39 +665,86 @@ class _GradeCard extends StatelessWidget {
   }
 }
 
-class _NoAvailableContent extends StatelessWidget {
-  const _NoAvailableContent();
+class _AddGradeCard extends StatelessWidget {
+  final int index;
+  final VoidCallback onTap;
+
+  const _AddGradeCard({
+    required this.index,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock_outline, size: 56, color: AppTheme.textMuted),
-            const SizedBox(height: 12),
-            const Text(
-              'لا توجد أسئلة متاحة لهذا الحساب',
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
+    final colors = AppTheme.categoryPalette(index);
+    final accentColor = colors.last;
+
+    return Material(
+      color: colors.first,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: colors.first,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: accentColor.withValues(alpha: 0.22)),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
               ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const ManageContentScreen()),
-                );
-              },
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('إضافة محتوى يدوي'),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppTheme.iconSurface(accentColor),
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: AppTheme.iconBorder(accentColor)),
+                    ),
+                    child: Icon(
+                      Icons.add_rounded,
+                      color: accentColor,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              const Text(
+                'إضافة صف',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: AppTheme.textDark,
+                  fontSize: 18,
+                  height: 1.25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'اضغط لإضافة صف جديد',
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: AppTheme.textMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

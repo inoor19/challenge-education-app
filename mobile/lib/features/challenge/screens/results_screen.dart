@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../setup/screens/select_grade_screen.dart';
 import '../providers/challenge_provider.dart';
+import 'challenge_arena_screen.dart';
+import 'saved_challenges_screen.dart';
 
 class ResultsScreen extends ConsumerWidget {
   const ResultsScreen({super.key});
@@ -38,7 +40,12 @@ class ResultsScreen extends ConsumerWidget {
                         ? const _EmptyResults()
                         : _ResultsList(groups: sorted, isTablet: isTablet),
                   ),
-                  _HomeAction(onPressed: () => _goHome(context)),
+                  _ResultsActions(
+                    canRestart: state.session != null,
+                    onRestart: () =>
+                        _restartChallenge(context, ref, state.session),
+                    onBackToChallenges: () => _goToChallenges(context, ref),
+                  ),
                 ],
               );
             },
@@ -54,12 +61,38 @@ class ResultsScreen extends ConsumerWidget {
       if (session?.subjectPart != null) session!.subjectPart!.name,
       if (session?.grade != null) session!.grade!.name,
     ];
-    return parts.isEmpty ? 'ساحة التحدي' : parts.join(' - ');
+    return parts.isEmpty ? 'ساحة التنافس' : parts.join(' - ');
   }
 
-  void _goHome(BuildContext context) {
+  Future<void> _restartChallenge(
+    BuildContext context,
+    WidgetRef ref,
+    ChallengeSession? session,
+  ) async {
+    if (session == null) return;
+
+    try {
+      await ref.read(challengeProvider.notifier).restartChallenge(session.id);
+      if (!context.mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ChallengeArenaScreen()),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppError.message(e, fallback: 'تعذر إعادة المنافسة. حاول مجدداً.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _goToChallenges(BuildContext context, WidgetRef ref) {
+    ref.invalidate(savedChallengesProvider);
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SelectGradeScreen()),
+      MaterialPageRoute(builder: (_) => const SavedChallengesScreen()),
       (route) => false,
     );
   }
@@ -395,27 +428,47 @@ class _EmptyResults extends StatelessWidget {
   }
 }
 
-class _HomeAction extends StatelessWidget {
-  final VoidCallback onPressed;
+class _ResultsActions extends StatelessWidget {
+  final bool canRestart;
+  final VoidCallback onRestart;
+  final VoidCallback onBackToChallenges;
 
-  const _HomeAction({required this.onPressed});
+  const _ResultsActions({
+    required this.canRestart,
+    required this.onRestart,
+    required this.onBackToChallenges,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 6, 18, 18),
-      child: SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton.icon(
-          onPressed: onPressed,
-          icon: const Icon(Icons.home_rounded),
-          label: const Text('العودة للرئيسية'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.accent,
-            foregroundColor: Colors.white,
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: canRestart ? onRestart : null,
+              icon: const Icon(Icons.replay_rounded),
+              label: const Text('إعادة المنافسة'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: onBackToChallenges,
+              icon: const Icon(Icons.emoji_events_rounded),
+              label: const Text('العودة لقائمة المنافسات'),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -20,9 +20,11 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages;
+use Filament\Pages\Auth\Login;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -43,7 +45,14 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Blue,
             ])
-            ->brandName('ساحة التحدي التعليمي')
+            ->brandName('ساحة التنافس')
+            ->brandLogo(asset('logo.png'))
+            ->brandLogoHeight('3rem')
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): string => '<style>.fi-simple-header .fi-logo{height:4.5rem!important}</style>',
+                scopes: Login::class,
+            )
             ->font('Tajawal', url: asset('css/fonts.css'), provider: LocalFontProvider::class)
             ->resources([
                 GradeResource::class,

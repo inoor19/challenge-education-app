@@ -7,6 +7,7 @@ use App\Http\Resources\ChapterResource;
 use App\Http\Resources\GradeResource;
 use App\Http\Resources\LessonResource;
 use App\Http\Resources\QuestionResource;
+use App\Http\Resources\SubjectPartResource;
 use App\Http\Resources\SubjectResource;
 use App\Models\Chapter;
 use App\Models\Grade;
@@ -18,6 +19,7 @@ use App\Support\ContentTextSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class TeacherContentController extends Controller
 {
@@ -134,6 +136,30 @@ class TeacherContentController extends Controller
         $subject->update(['is_active' => false]);
 
         return response()->json(['message' => 'تم إخفاء المادة.']);
+    }
+
+    public function storeSubjectPart(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'subject_id' => ['required', 'exists:subjects,id'],
+            'name' => ['required', 'string', 'max:150'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $subject = Subject::findOrFail($data['subject_id']);
+        $this->abortUnlessVisible($request, $subject);
+
+        $nextPartNumber = ((int) $subject->parts()->max('part_number')) + 1;
+
+        $part = SubjectPart::create([
+            'subject_id' => $subject->id,
+            'name' => $data['name'],
+            'part_number' => $nextPartNumber,
+            'sort_order' => $data['sort_order'] ?? $nextPartNumber,
+            'is_active' => true,
+        ]);
+
+        return (new SubjectPartResource($part))->response()->setStatusCode(201);
     }
 
     public function chapters(Request $request): JsonResponse
@@ -291,6 +317,7 @@ class TeacherContentController extends Controller
     public function storeQuestion(Request $request): JsonResponse
     {
         $data = $this->sanitizeQuestionData($this->validateQuestion($request));
+        $this->validateQuestionAnswer($data);
         $lesson = Lesson::findOrFail($data['lesson_id']);
         $this->abortUnlessVisible($request, $lesson);
 
@@ -308,6 +335,7 @@ class TeacherContentController extends Controller
     {
         $this->abortUnlessOwned($request, $question);
         $data = $this->sanitizeQuestionData($this->validateQuestion($request, true));
+        $this->validateQuestionAnswer($data, $question);
 
         if (isset($data['lesson_id'])) {
             $this->abortUnlessVisible($request, Lesson::findOrFail($data['lesson_id']));
@@ -338,7 +366,7 @@ class TeacherContentController extends Controller
             'option_b' => ['nullable', 'string', 'max:255'],
             'option_c' => ['nullable', 'string', 'max:255'],
             'option_d' => ['nullable', 'string', 'max:255'],
-            'correct_answer' => [$required, 'string', 'max:255'],
+            'correct_answer' => [$partial ? 'sometimes' : 'present', 'nullable', 'string', 'max:255'],
             'level' => [$required, Rule::in(['easy', 'hard'])],
             'explanation' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -361,6 +389,50 @@ class TeacherContentController extends Controller
         }
 
         return $data;
+    }
+
+    private function validateQuestionAnswer(array $data, ?Question $existing = null): void
+    {
+        $questionType = $data['question_type'] ?? $existing?->question_type;
+        $correctAnswer = $data['correct_answer'] ?? $existing?->correct_answer;
+
+        if ($questionType === null) {
+            return;
+        }
+
+        $correctAnswer = trim((string) $correctAnswer);
+
+        if ($questionType === 'text') {
+            return;
+        }
+
+        if ($questionType === 'true_false' && ! in_array($correctAnswer, ['صح', 'خطأ'], true)) {
+            throw ValidationException::withMessages([
+                'correct_answer' => 'الإجابة الصحيحة لسؤال الصح والخطأ يجب أن تكون صح أو خطأ.',
+            ]);
+        }
+
+        if ($questionType !== 'multiple_choice') {
+            return;
+        }
+
+        $options = collect(['option_a', 'option_b', 'option_c', 'option_d'])
+            ->map(fn (string $field) => $data[$field] ?? $existing?->{$field})
+            ->filter(fn ($option) => is_string($option) && trim($option) !== '')
+            ->map(fn (string $option) => trim($option))
+            ->values();
+
+        if ($options->count() < 2) {
+            throw ValidationException::withMessages([
+                'option_a' => 'سؤال الاختيارات يحتاج خيارين على الأقل.',
+            ]);
+        }
+
+        if (! $options->containsStrict($correctAnswer)) {
+            throw ValidationException::withMessages([
+                'correct_answer' => 'الإجابة الصحيحة يجب أن تطابق نص أحد الخيارات.',
+            ]);
+        }
     }
 
     private function abortUnlessOwned(Request $request, mixed $model): void

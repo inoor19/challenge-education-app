@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
@@ -31,7 +32,10 @@ class SelectSubjectScreen extends ConsumerWidget {
               error: (e, _) => AppStateView(
                 icon: Icons.cloud_off_rounded,
                 title: 'تعذر تحميل المواد',
-                message: e.toString(),
+                message: AppError.message(
+                  e,
+                  fallback: 'تعذر تحميل المواد. حاول مجدداً.',
+                ),
               ),
               data: (subjects) => subjects.isEmpty
                   ? const AppStateView(

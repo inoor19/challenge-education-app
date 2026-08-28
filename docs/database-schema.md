@@ -1,4 +1,4 @@
-# Database Schema — ساحة التحدي التعليمي
+# Database Schema — ساحة التنافس
 
 ## Tables
 

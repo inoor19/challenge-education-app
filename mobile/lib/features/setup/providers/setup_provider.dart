@@ -6,6 +6,7 @@ import '../../../core/providers/api_provider.dart';
 
 class SetupState {
   final Grade? selectedGrade;
+  final String? selectedGradeSection;
   final Subject? selectedSubject;
   final SubjectPart? selectedSubjectPart;
   final List<Chapter> selectedChapters;
@@ -14,6 +15,7 @@ class SetupState {
 
   const SetupState({
     this.selectedGrade,
+    this.selectedGradeSection,
     this.selectedSubject,
     this.selectedSubjectPart,
     this.selectedChapters = const [],
@@ -23,6 +25,7 @@ class SetupState {
 
   SetupState copyWith({
     Grade? selectedGrade,
+    String? selectedGradeSection,
     Subject? selectedSubject,
     SubjectPart? selectedSubjectPart,
     List<Chapter>? selectedChapters,
@@ -31,6 +34,7 @@ class SetupState {
   }) =>
       SetupState(
         selectedGrade: selectedGrade ?? this.selectedGrade,
+        selectedGradeSection: selectedGradeSection ?? this.selectedGradeSection,
         selectedSubject: selectedSubject ?? this.selectedSubject,
         selectedSubjectPart: selectedSubjectPart ?? this.selectedSubjectPart,
         selectedChapters: selectedChapters ?? this.selectedChapters,
@@ -40,6 +44,7 @@ class SetupState {
 
   bool get isReadyToChallenge =>
       selectedGrade != null &&
+      selectedGradeSection != null &&
       selectedSubject != null &&
       selectedSubjectPart != null &&
       selectedChapters.isNotEmpty &&
@@ -52,13 +57,37 @@ class SetupState {
 class SetupNotifier extends StateNotifier<SetupState> {
   SetupNotifier() : super(const SetupState());
 
+  void loadFromChallenge(ChallengeSession session) {
+    state = SetupState(
+      selectedGrade: session.grade,
+      selectedGradeSection: session.gradeSection,
+      selectedSubject: session.subject,
+      selectedSubjectPart: session.subjectPart,
+      selectedChapters: session.chapters,
+      selectedLessons: session.lessons,
+      selectedQuestions: session.questions
+          .map((item) => item.question)
+          .whereType<Question>()
+          .toList(),
+    );
+  }
+
   void selectGrade(Grade grade) {
     state = SetupState(selectedGrade: grade);
+  }
+
+  void selectGradeSection(String section) {
+    if (state.selectedGradeSection == section) return;
+    state = SetupState(
+      selectedGrade: state.selectedGrade,
+      selectedGradeSection: section,
+    );
   }
 
   void selectSubject(Subject subject) {
     state = SetupState(
       selectedGrade: state.selectedGrade,
+      selectedGradeSection: state.selectedGradeSection,
       selectedSubject: subject,
     );
   }
@@ -86,6 +115,14 @@ class SetupNotifier extends StateNotifier<SetupState> {
     );
   }
 
+  void selectChapters(List<Chapter> chapters) {
+    state = state.copyWith(
+      selectedChapters: chapters,
+      selectedLessons: [],
+      selectedQuestions: [],
+    );
+  }
+
   void toggleLesson(Lesson lesson) {
     final current = List<Lesson>.from(state.selectedLessons);
     if (current.any((l) => l.id == lesson.id)) {
@@ -97,6 +134,10 @@ class SetupNotifier extends StateNotifier<SetupState> {
   }
 
   void selectAllLessons(List<Lesson> lessons) {
+    state = state.copyWith(selectedLessons: lessons, selectedQuestions: []);
+  }
+
+  void selectLessons(List<Lesson> lessons) {
     state = state.copyWith(selectedLessons: lessons, selectedQuestions: []);
   }
 
@@ -151,7 +192,7 @@ final chaptersProvider =
 final subjectPartsProvider =
     FutureProvider.family<List<SubjectPart>, int>((ref, subjectId) async {
   final api = ref.watch(apiClientProvider);
-  final data = await api.getSubjectParts(subjectId);
+  final data = await api.getSubjectParts(subjectId, includeEmpty: true);
   return data.map((j) => SubjectPart.fromJson(j)).toList();
 });
 
@@ -177,4 +218,17 @@ final questionsProvider =
       .toList();
   final data = await api.getQuestions(lessonIds);
   return data.map((j) => Question.fromJson(j)).toList();
+});
+
+final packageSuggestionsProvider =
+    FutureProvider.family<List<QuestionPackage>, String>((ref, key) async {
+  final api = ref.watch(apiClientProvider);
+  final parts = key.split(':');
+  final scope = parts.first;
+  final id = parts.length > 1 ? int.parse(parts[1]) : null;
+  final data = await api.getPackageSuggestions(
+    gradeId: scope == 'grade' ? id : null,
+    subjectId: scope == 'subject' ? id : null,
+  );
+  return data.map((j) => QuestionPackage.fromJson(j)).toList();
 });

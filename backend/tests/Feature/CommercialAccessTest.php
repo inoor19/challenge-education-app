@@ -32,9 +32,38 @@ class CommercialAccessTest extends TestCase
         $this->getJson('/api/grades')
             ->assertOk()
             ->assertJsonFragment(['id' => $free['grade']->id])
-            ->assertJsonMissing(['id' => $locked['grade']->id]);
+            ->assertJsonFragment(['id' => $locked['grade']->id]);
 
         $this->getJson('/api/questions?lesson_ids[]=' . $locked['lesson']->id)
+            ->assertOk()
+            ->assertJsonCount(0);
+    }
+
+    public function test_package_suggestions_return_only_unowned_paid_packages(): void
+    {
+        $teacher = $this->teacher();
+        $free = $this->curriculumPackage('صف مجاني للاقتراحات', true);
+        $locked = $this->curriculumPackage('صف مدفوع للاقتراحات', false);
+
+        Sanctum::actingAs($teacher);
+
+        $this->getJson('/api/packages/suggestions?grade_id=' . $free['grade']->id)
+            ->assertOk()
+            ->assertJsonCount(0);
+
+        $this->getJson('/api/packages/suggestions?subject_id=' . $locked['subject']->id)
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id', $locked['package']->id)
+            ->assertJsonPath('0.is_owned', false);
+
+        TeacherPackage::create([
+            'user_id' => $teacher->id,
+            'question_package_id' => $locked['package']->id,
+            'purchased_at' => now(),
+        ]);
+
+        $this->getJson('/api/packages/suggestions?subject_id=' . $locked['subject']->id)
             ->assertOk()
             ->assertJsonCount(0);
     }
@@ -81,6 +110,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $owned['grade']->id,
+            'grade_section' => 'أ',
             'subject_id' => $other['subject']->id,
             'subject_part_id' => $owned['part']->id,
             'chapter_ids' => [$owned['chapter']->id],
@@ -285,6 +315,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $grade->id,
+            'grade_section' => 'أ',
             'subject_id' => $subject->id,
             'subject_part_id' => $partTwo->id,
             'chapter_ids' => [$chapter->id],
@@ -292,8 +323,29 @@ class CommercialAccessTest extends TestCase
             'timer_seconds' => 60,
             'timer_enabled' => true,
         ])->assertCreated()
+            ->assertJsonPath('grade_section', 'أ')
             ->assertJsonPath('subject_part.id', $partTwo->id)
             ->assertJsonCount(1, 'questions');
+    }
+
+    public function test_challenge_creation_rejects_invalid_grade_section(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف شعبة غير صحيحة', true);
+
+        Sanctum::actingAs($teacher);
+
+        $this->postJson('/api/challenges', [
+            'grade_id' => $owned['grade']->id,
+            'grade_section' => 'د',
+            'subject_id' => $owned['subject']->id,
+            'subject_part_id' => $owned['part']->id,
+            'chapter_ids' => [$owned['chapter']->id],
+            'lesson_ids' => [$owned['lesson']->id],
+            'timer_seconds' => 60,
+            'timer_enabled' => true,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('grade_section');
     }
 
     public function test_challenge_creation_uses_only_selected_questions(): void
@@ -315,6 +367,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $owned['grade']->id,
+            'grade_section' => 'أ',
             'subject_id' => $owned['subject']->id,
             'subject_part_id' => $owned['part']->id,
             'chapter_ids' => [$owned['chapter']->id],
@@ -337,6 +390,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $owned['grade']->id,
+            'grade_section' => 'أ',
             'subject_id' => $owned['subject']->id,
             'subject_part_id' => $owned['part']->id,
             'chapter_ids' => [$owned['chapter']->id],
@@ -357,6 +411,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $locked['grade']->id,
+            'grade_section' => 'أ',
             'subject_id' => $locked['subject']->id,
             'subject_part_id' => $locked['part']->id,
             'chapter_ids' => [$locked['chapter']->id],
@@ -387,6 +442,7 @@ class CommercialAccessTest extends TestCase
 
         $this->postJson('/api/challenges', [
             'grade_id' => $owned['grade']->id,
+            'grade_section' => 'أ',
             'subject_id' => $owned['subject']->id,
             'subject_part_id' => $owned['part']->id,
             'chapter_ids' => [$owned['chapter']->id],
@@ -395,6 +451,166 @@ class CommercialAccessTest extends TestCase
             'timer_enabled' => true,
         ])->assertCreated()
             ->assertJsonCount(2, 'questions');
+    }
+
+    public function test_teacher_can_list_only_their_saved_challenges(): void
+    {
+        $teacher = $this->teacher();
+        $otherTeacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف التحديات المحفوظة', true);
+
+        $session = $this->challengeSessionFor($teacher, $owned);
+        $otherSession = $this->challengeSessionFor($otherTeacher, $owned);
+
+        Sanctum::actingAs($teacher);
+
+        $this->getJson('/api/challenges')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id', $session->id)
+            ->assertJsonMissing(['id' => $otherSession->id]);
+    }
+
+    public function test_saved_challenge_show_keeps_scores_and_used_questions(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف حالة محفوظة', true);
+        $session = $this->challengeSessionFor($teacher, $owned);
+        $group = $session->groups()->create([
+            'name' => 'الفريق الأول',
+            'score' => 5,
+            'sort_order' => 0,
+        ]);
+        $challengeQuestion = $session->challengeQuestions()->create([
+            'question_id' => $owned['question']->id,
+            'sequence_number' => 1,
+            'is_used' => true,
+            'selected_group_id' => $group->id,
+            'last_dice_value' => 2,
+            'awarded_points' => 5,
+            'answer_status' => 'correct',
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $this->getJson("/api/challenges/{$session->id}")
+            ->assertOk()
+            ->assertJsonPath('groups.0.score', 5)
+            ->assertJsonPath('questions.0.id', $challengeQuestion->id)
+            ->assertJsonPath('questions.0.is_used', true)
+            ->assertJsonPath('questions.0.selected_group_id', $group->id);
+    }
+
+    public function test_teacher_can_update_saved_challenge_timer_and_groups(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف تعديل التحدي', true);
+        $session = $this->challengeSessionFor($teacher, $owned);
+        $firstGroup = $session->groups()->create([
+            'name' => 'الفريق القديم',
+            'score' => 0,
+            'sort_order' => 0,
+        ]);
+        $secondGroup = $session->groups()->create([
+            'name' => 'الفريق الثاني',
+            'score' => 0,
+            'sort_order' => 1,
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $this->patchJson("/api/challenges/{$session->id}", [
+            'timer_seconds' => 90,
+            'timer_enabled' => false,
+            'groups' => [
+                ['id' => $firstGroup->id, 'name' => 'الفريق المحدّث', 'sort_order' => 1],
+                ['name' => 'الفريق الجديد', 'sort_order' => 0],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('timer_seconds', 90)
+            ->assertJsonPath('timer_enabled', false)
+            ->assertJsonFragment(['name' => 'الفريق المحدّث'])
+            ->assertJsonFragment(['name' => 'الفريق الجديد'])
+            ->assertJsonMissing(['id' => $secondGroup->id]);
+
+        $this->assertDatabaseMissing('challenge_groups', ['id' => $secondGroup->id]);
+    }
+
+    public function test_cannot_delete_group_with_saved_score_when_updating_challenge(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف حذف مجموعة محفوظة', true);
+        $session = $this->challengeSessionFor($teacher, $owned);
+        $protectedGroup = $session->groups()->create([
+            'name' => 'الفريق المحمي',
+            'score' => 3,
+            'sort_order' => 0,
+        ]);
+        $editableGroup = $session->groups()->create([
+            'name' => 'الفريق الثاني',
+            'score' => 0,
+            'sort_order' => 1,
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $this->patchJson("/api/challenges/{$session->id}", [
+            'groups' => [
+                ['id' => $editableGroup->id, 'name' => 'الفريق الثاني', 'sort_order' => 0],
+            ],
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseHas('challenge_groups', ['id' => $protectedGroup->id]);
+    }
+
+    public function test_completed_challenge_can_be_restarted_with_saved_scores(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف إعادة التحدي', true);
+        $session = $this->challengeSessionFor($teacher, $owned);
+        $session->update(['status' => 'completed', 'ended_at' => now()]);
+        $group = $session->groups()->create([
+            'name' => 'فريق محفوظ',
+            'score' => 8,
+            'sort_order' => 0,
+        ]);
+        $session->challengeQuestions()->create([
+            'question_id' => $owned['question']->id,
+            'sequence_number' => 1,
+            'is_used' => true,
+            'selected_group_id' => $group->id,
+            'last_dice_value' => 2,
+            'awarded_points' => 8,
+            'answer_status' => 'correct',
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $response = $this->postJson("/api/challenges/{$session->id}/restart")
+            ->assertCreated()
+            ->assertJsonPath('status', 'active')
+            ->assertJsonPath('grade_section', 'أ')
+            ->assertJsonPath('groups.0.name', 'فريق محفوظ')
+            ->assertJsonPath('groups.0.score', 8)
+            ->assertJsonPath('questions.0.is_used', false);
+
+        $this->assertNotSame($session->id, $response->json('id'));
+        $this->assertDatabaseHas('challenge_groups', [
+            'challenge_session_id' => $session->id,
+            'score' => 8,
+        ]);
+    }
+
+    public function test_active_challenge_cannot_be_restarted(): void
+    {
+        $teacher = $this->teacher();
+        $owned = $this->curriculumPackage('صف لا يعاد وهو نشط', true);
+        $session = $this->challengeSessionFor($teacher, $owned);
+
+        Sanctum::actingAs($teacher);
+
+        $this->postJson("/api/challenges/{$session->id}/restart")
+            ->assertUnprocessable();
     }
 
     public function test_teacher_questions_endpoint_returns_valid_json_with_literal_backslashes(): void
@@ -504,5 +720,24 @@ class CommercialAccessTest extends TestCase
         $package->questions()->attach($question);
 
         return compact('grade', 'subject', 'part', 'chapter', 'lesson', 'question', 'package');
+    }
+
+    private function challengeSessionFor(User $teacher, array $owned): ChallengeSession
+    {
+        $session = ChallengeSession::create([
+            'teacher_id' => $teacher->id,
+            'grade_id' => $owned['grade']->id,
+            'grade_section' => 'أ',
+            'subject_id' => $owned['subject']->id,
+            'subject_part_id' => $owned['part']->id,
+            'timer_seconds' => 60,
+            'timer_enabled' => true,
+            'status' => 'active',
+            'started_at' => now(),
+        ]);
+        $session->chapters()->attach($owned['chapter']->id);
+        $session->lessons()->attach($owned['lesson']->id);
+
+        return $session;
     }
 }

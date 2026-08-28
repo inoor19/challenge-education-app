@@ -1,4 +1,4 @@
-# API Specification — ساحة التحدي التعليمي
+# API Specification — ساحة التنافس
 
 ## Base URL
 ```

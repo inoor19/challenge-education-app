@@ -25,4 +25,20 @@ class PackageController extends Controller
             QuestionPackageResource::collection($this->entitlements->ownedPackages($request->user()))
         );
     }
+
+    public function suggestions(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
+            'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
+        ]);
+
+        return response()->json(
+            QuestionPackageResource::collection($this->entitlements->suggestedPackages(
+                $request->user(),
+                $data['grade_id'] ?? null,
+                $data['subject_id'] ?? null,
+            ))
+        );
+    }
 }

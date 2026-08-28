@@ -1,7 +1,7 @@
 {
     "name": "challenge-edu/backend",
     "version": "1.0.0",
-    "description": "ساحة التحدي التعليمي — Backend API & Admin Dashboard",
+    "description": "ساحة التنافس — واجهة API ولوحة الإدارة",
     "keywords": ["laravel", "education", "challenge"],
     "license": "MIT",
     "require": {

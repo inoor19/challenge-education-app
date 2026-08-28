@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/providers/api_provider.dart';
 import '../../setup/providers/setup_provider.dart';
@@ -111,6 +112,27 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
 
   // ── Session Setup ───────────────────────────────────────────────────────────
 
+  Future<void> loadChallenge(int id) async {
+    state = state.copyWith(isLoading: true);
+    try {
+      final session = ChallengeSession.fromJson(await _api.getChallenge(id));
+      state = ChallengeArenaState(
+        session: session,
+        timerRemaining: session.timerSeconds,
+        currentTurnIndex: _restoredTurnIndex(session),
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppError.message(
+          e,
+          fallback: 'تعذر تحميل التحدي المحفوظ. حاول مجدداً.',
+        ),
+      );
+      rethrow;
+    }
+  }
+
   Future<void> createChallenge({
     required SetupState setup,
     required List<String> groupNames,
@@ -121,6 +143,7 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
 
     final session = await _api.createChallenge({
       'grade_id': setup.selectedGrade!.id,
+      'grade_section': setup.selectedGradeSection!,
       'subject_id': setup.selectedSubject!.id,
       'subject_part_id': setup.selectedSubjectPart!.id,
       'chapter_ids': setup.selectedChapters.map((c) => c.id).toList(),
@@ -147,6 +170,84 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
     );
   }
 
+  Future<ChallengeSession> updateChallengeSettings({
+    required int challengeId,
+    required int timerSeconds,
+    required bool timerEnabled,
+    required List<Map<String, dynamic>> groups,
+  }) async {
+    final updated = ChallengeSession.fromJson(
+      await _api.updateChallenge(challengeId, {
+        'timer_seconds': timerSeconds,
+        'timer_enabled': timerEnabled,
+        'groups': groups,
+      }),
+    );
+
+    if (state.session?.id == updated.id) {
+      state = state.copyWith(
+        session: updated,
+        timerRemaining: updated.timerSeconds,
+      );
+    }
+
+    return updated;
+  }
+
+  Future<ChallengeSession> updateChallengeSetup({
+    required int challengeId,
+    required SetupState setup,
+  }) async {
+    final updated = ChallengeSession.fromJson(
+      await _api.updateChallenge(challengeId, {
+        'subject_part_id': setup.selectedSubjectPart!.id,
+        'chapter_ids': setup.selectedChapters.map((c) => c.id).toList(),
+        'lesson_ids': setup.selectedLessons.map((l) => l.id).toList(),
+        'question_ids': setup.selectedQuestions.map((q) => q.id).toList(),
+      }),
+    );
+
+    if (state.session?.id == updated.id) {
+      state = state.copyWith(
+        session: updated,
+        timerRemaining: updated.timerSeconds,
+      );
+    }
+
+    return updated;
+  }
+
+  Future<ChallengeSession> restartChallenge(int challengeId) async {
+    state = state.copyWith(isLoading: true);
+    try {
+      final restarted =
+          ChallengeSession.fromJson(await _api.restartChallenge(challengeId));
+      state = ChallengeArenaState(
+        session: restarted,
+        timerRemaining: restarted.timerSeconds,
+        currentTurnIndex: _restoredTurnIndex(restarted),
+      );
+      return restarted;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppError.message(
+          e,
+          fallback: 'تعذر إعادة التنافس. حاول مجدداً.',
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> deleteChallenge(int challengeId) async {
+    await _api.deleteChallenge(challengeId);
+    if (state.session?.id == challengeId) {
+      _stopTimer();
+      state = const ChallengeArenaState();
+    }
+  }
+
   // ── Dice ────────────────────────────────────────────────────────────────────
 
   Future<void> rollDice() async {
@@ -159,17 +260,33 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
     } catch (e) {
       state = state.copyWith(
         isDiceRolling: false,
-        error: 'تعذر رمي النرد من الخادم. حاول مجدداً.',
+        error: AppError.message(
+          e,
+          fallback: 'تعذر رمي النرد. حاول مجدداً.',
+        ),
       );
     }
   }
 
   // ── Questions ───────────────────────────────────────────────────────────────
 
+  void selectAnsweringGroup(int groupId) {
+    final session = state.session;
+    if (session == null || state.activeQuestion != null) return;
+
+    final groupIndex = state.groups.indexWhere((group) => group.id == groupId);
+    if (groupIndex < 0) return;
+
+    state = state.copyWith(
+      session: session.copyWith(currentTurnGroupId: groupId),
+      currentTurnIndex: groupIndex,
+    );
+  }
+
   void openQuestion(ChallengeQuestionItem question) {
     state = state.copyWith(activeQuestion: question, clearLastAnswer: true);
     if (state.session?.timerEnabled == true) {
-      _resetTimer();
+      resetAndStartTimer();
     }
   }
 
@@ -214,18 +331,19 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
       return cq;
     }).toList();
 
+    final nextTurnIndex = _nextTurnIndex(answeringGroupId);
     final updatedSession = s.copyWith(
       groups: updatedGroups,
       questions: updatedQuestions,
+      currentTurnGroupId: _groupIdAtTurn(nextTurnIndex, updatedGroups),
     );
 
     _stopTimer();
     state = state.copyWith(
       session: updatedSession,
       lastAnswerResult: 'correct',
-      clearActiveQuestion: true,
       clearDice: true,
-      currentTurnIndex: _nextTurnIndex(),
+      currentTurnIndex: nextTurnIndex,
     );
     await _completeIfAllQuestionsUsed();
   }
@@ -256,15 +374,18 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
       return cq;
     }).toList();
 
-    final updatedSession = s.copyWith(questions: updatedQuestions);
+    final nextTurnIndex = _nextTurnIndex(answeringGroupId);
+    final updatedSession = s.copyWith(
+      questions: updatedQuestions,
+      currentTurnGroupId: _groupIdAtTurn(nextTurnIndex, state.groups),
+    );
 
     _stopTimer();
     state = state.copyWith(
       session: updatedSession,
       lastAnswerResult: 'wrong',
-      clearActiveQuestion: true,
       clearDice: true,
-      currentTurnIndex: _nextTurnIndex(),
+      currentTurnIndex: nextTurnIndex,
     );
     await _completeIfAllQuestionsUsed();
   }
@@ -307,10 +428,68 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
     state = state.copyWith(session: updatedSession);
   }
 
-  int _nextTurnIndex() {
-    final groupCount = state.groups.length;
-    if (groupCount == 0) return 0;
-    return (state.currentTurnIndex + 1) % groupCount;
+  int _nextTurnIndex(int answeringGroupId) {
+    final sortedGroups = state.groups;
+    if (sortedGroups.isEmpty) return 0;
+
+    final answeringGroupIndex =
+        sortedGroups.indexWhere((group) => group.id == answeringGroupId);
+    if (answeringGroupIndex < 0) return state.currentTurnIndex;
+
+    return (answeringGroupIndex + 1) % sortedGroups.length;
+  }
+
+  int? _groupIdAtTurn(int turnIndex, List<ChallengeGroup> groups) {
+    if (groups.isEmpty) return null;
+    final sortedGroups = List<ChallengeGroup>.of(groups)
+      ..sort((a, b) {
+        final order = a.sortOrder.compareTo(b.sortOrder);
+        return order == 0 ? a.id.compareTo(b.id) : order;
+      });
+    return sortedGroups[turnIndex % sortedGroups.length].id;
+  }
+
+  int _restoredTurnIndex(ChallengeSession session) {
+    final groups = List<ChallengeGroup>.of(session.groups)
+      ..sort((a, b) {
+        final order = a.sortOrder.compareTo(b.sortOrder);
+        return order == 0 ? a.id.compareTo(b.id) : order;
+      });
+    if (groups.isEmpty) return 0;
+
+    final savedTurnGroupId = session.currentTurnGroupId;
+    if (savedTurnGroupId != null) {
+      final savedTurnIndex =
+          groups.indexWhere((group) => group.id == savedTurnGroupId);
+      if (savedTurnIndex >= 0) return savedTurnIndex;
+    }
+
+    final usedQuestions = session.questions
+        .where(
+            (question) => question.isUsed && question.selectedGroupId != null)
+        .toList();
+    if (usedQuestions.isEmpty) return 0;
+
+    usedQuestions.sort((a, b) {
+      final aUsedAt = DateTime.tryParse(a.usedAt ?? '');
+      final bUsedAt = DateTime.tryParse(b.usedAt ?? '');
+      if (aUsedAt != null && bUsedAt != null) {
+        final dateOrder = bUsedAt.compareTo(aUsedAt);
+        if (dateOrder != 0) return dateOrder;
+      } else if (aUsedAt != null) {
+        return -1;
+      } else if (bUsedAt != null) {
+        return 1;
+      }
+
+      return b.sequenceNumber.compareTo(a.sequenceNumber);
+    });
+
+    final lastGroupId = usedQuestions.first.selectedGroupId;
+    final lastGroupIndex =
+        groups.indexWhere((group) => group.id == lastGroupId);
+    if (lastGroupIndex < 0) return 0;
+    return (lastGroupIndex + 1) % groups.length;
   }
 
   // ── Timer ───────────────────────────────────────────────────────────────────
@@ -363,7 +542,16 @@ class ChallengeNotifier extends StateNotifier<ChallengeArenaState> {
 
   Future<void> _completeIfAllQuestionsUsed() async {
     if (state.allQuestionsUsed && state.session?.status != 'completed') {
-      await completeChallenge();
+      try {
+        await completeChallenge();
+      } catch (e) {
+        state = state.copyWith(
+          error: AppError.message(
+            e,
+            fallback: 'تعذر إكمال المنافسة تلقائياً. حاول مجدداً.',
+          ),
+        );
+      }
     }
   }
 }
@@ -374,3 +562,10 @@ final challengeProvider =
     StateNotifierProvider<ChallengeNotifier, ChallengeArenaState>(
   (ref) => ChallengeNotifier(ref.watch(apiClientProvider)),
 );
+
+final savedChallengesProvider =
+    FutureProvider<List<ChallengeSession>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final data = await api.getChallenges();
+  return data.map((j) => ChallengeSession.fromJson(j)).toList();
+});

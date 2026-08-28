@@ -25,7 +25,13 @@ class ChapterController extends Controller
         $chapters = Chapter::where('subject_id', $request->subject_id)
             ->active()
             ->when($request->filled('subject_part_id'), fn ($query) => $query->where('subject_part_id', $request->integer('subject_part_id')))
-            ->whereHas('lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+            ->where(function ($query) use ($request, $questionIds) {
+                $query->whereHas('lessons.questions', fn ($query) => $query->whereIn('questions.id', $questionIds))
+                    ->orWhere(function ($query) use ($request) {
+                        $query->where('visibility', 'private')
+                            ->where('created_by_user_id', $request->user()->id);
+                    });
+            })
             ->with('subjectPart')
             ->get();
 

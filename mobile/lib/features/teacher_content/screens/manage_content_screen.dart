@@ -150,7 +150,7 @@ class _ManageContentScreenState extends ConsumerState<ManageContentScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة المحتوى'),
+        title: const Text('إنشاء صفوف واسئلة'),
         actions: [
           IconButton(
             onPressed: _loadAll,
@@ -161,8 +161,7 @@ class _ManageContentScreenState extends ConsumerState<ManageContentScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
+          : Column(
               children: [
                 const AppPageHeader(
                   icon: Icons.create_new_folder_rounded,
@@ -170,8 +169,11 @@ class _ManageContentScreenState extends ConsumerState<ManageContentScreen> {
                   subtitle:
                       'أضف الصفوف والمواد والفصول والدروس والأسئلة لاستخدامك داخل التحديات.',
                 ),
-                const SizedBox(height: 16),
-                _SectionCard(
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      _SectionCard(
                   title: 'إضافة صف',
                   icon: Icons.school_rounded,
                   children: [
@@ -411,6 +413,9 @@ class _ManageContentScreenState extends ConsumerState<ManageContentScreen> {
                         label: 'أسئلة الدرس المحدد',
                         count: lessonQuestions.length),
                   ],
+                ),
+                    ],
+                  ),
                 ),
               ],
             ),

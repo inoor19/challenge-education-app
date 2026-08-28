@@ -22,6 +22,7 @@ class CreateChallengeRequest extends FormRequest
     {
         return [
             'grade_id' => ['required', 'exists:grades,id'],
+            'grade_section' => ['required', 'string', 'in:أ,ب,ج'],
             'subject_id' => ['required', 'exists:subjects,id'],
             'subject_part_id' => ['required', 'exists:subject_parts,id'],
             'chapter_ids' => ['required', 'array', 'min:1'],
@@ -39,6 +40,8 @@ class CreateChallengeRequest extends FormRequest
     {
         return [
             'grade_id.required' => 'الصف الدراسي مطلوب.',
+            'grade_section.required' => 'شعبة الصف مطلوبة.',
+            'grade_section.in' => 'شعبة الصف يجب أن تكون أ أو ب أو ج.',
             'subject_id.required' => 'المادة مطلوبة.',
             'subject_part_id.required' => 'جزء المادة مطلوب.',
             'chapter_ids.required' => 'يجب اختيار فصل واحد على الأقل.',

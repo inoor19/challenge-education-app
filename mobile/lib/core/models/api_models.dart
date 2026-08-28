@@ -7,12 +7,14 @@ class Grade {
   final String name;
   final int sortOrder;
   final bool isActive;
+  final String? visibility; // 'official' | 'private'
 
   const Grade({
     required this.id,
     required this.name,
     required this.sortOrder,
     required this.isActive,
+    this.visibility,
   });
 
   factory Grade.fromJson(Map<String, dynamic> json) => Grade(
@@ -20,7 +22,10 @@ class Grade {
         name: json['name'],
         sortOrder: json['sort_order'] ?? 0,
         isActive: json['is_active'] ?? true,
+        visibility: json['visibility']?.toString(),
       );
+
+  bool get isPrivate => visibility == 'private';
 }
 
 class Subject {
@@ -204,6 +209,7 @@ class ChallengeQuestionItem {
   final int id;
   final int sequenceNumber;
   final bool isUsed;
+  final String? usedAt;
   final String? answerStatus; // 'correct' | 'wrong'
   final int? awardedPoints;
   final int? lastDiceValue;
@@ -214,6 +220,7 @@ class ChallengeQuestionItem {
     required this.id,
     required this.sequenceNumber,
     required this.isUsed,
+    this.usedAt,
     this.answerStatus,
     this.awardedPoints,
     this.lastDiceValue,
@@ -226,6 +233,7 @@ class ChallengeQuestionItem {
         id: json['id'],
         sequenceNumber: json['sequence_number'],
         isUsed: json['is_used'] ?? false,
+        usedAt: json['used_at'],
         answerStatus: json['answer_status'],
         awardedPoints: json['awarded_points'],
         lastDiceValue: json['last_dice_value'],
@@ -237,6 +245,7 @@ class ChallengeQuestionItem {
 
   ChallengeQuestionItem copyWith({
     bool? isUsed,
+    String? usedAt,
     String? answerStatus,
     int? awardedPoints,
     int? lastDiceValue,
@@ -246,6 +255,7 @@ class ChallengeQuestionItem {
         id: id,
         sequenceNumber: sequenceNumber,
         isUsed: isUsed ?? this.isUsed,
+        usedAt: usedAt ?? this.usedAt,
         answerStatus: answerStatus ?? this.answerStatus,
         awardedPoints: awardedPoints ?? this.awardedPoints,
         lastDiceValue: lastDiceValue ?? this.lastDiceValue,
@@ -257,6 +267,7 @@ class ChallengeQuestionItem {
 class ChallengeSession {
   final int id;
   final Grade? grade;
+  final String? gradeSection;
   final Subject? subject;
   final SubjectPart? subjectPart;
   final List<Chapter> chapters;
@@ -264,12 +275,16 @@ class ChallengeSession {
   final int timerSeconds;
   final bool timerEnabled;
   final String status;
+  final int? currentTurnGroupId;
+  final String? startedAt;
+  final String? endedAt;
   final List<ChallengeGroup> groups;
   final List<ChallengeQuestionItem> questions;
 
   const ChallengeSession({
     required this.id,
     this.grade,
+    this.gradeSection,
     this.subject,
     this.subjectPart,
     required this.chapters,
@@ -277,6 +292,9 @@ class ChallengeSession {
     required this.timerSeconds,
     required this.timerEnabled,
     required this.status,
+    this.currentTurnGroupId,
+    this.startedAt,
+    this.endedAt,
     required this.groups,
     required this.questions,
   });
@@ -285,6 +303,7 @@ class ChallengeSession {
       ChallengeSession(
         id: json['id'],
         grade: json['grade'] != null ? Grade.fromJson(json['grade']) : null,
+        gradeSection: json['grade_section'],
         subject:
             json['subject'] != null ? Subject.fromJson(json['subject']) : null,
         subjectPart: json['subject_part'] != null
@@ -299,6 +318,9 @@ class ChallengeSession {
         timerSeconds: json['timer_seconds'] ?? 60,
         timerEnabled: json['timer_enabled'] ?? true,
         status: json['status'] ?? 'active',
+        currentTurnGroupId: json['current_turn_group_id'],
+        startedAt: json['started_at'],
+        endedAt: json['ended_at'],
         groups: (json['groups'] as List? ?? [])
             .map((g) => ChallengeGroup.fromJson(g))
             .toList(),
@@ -309,19 +331,29 @@ class ChallengeSession {
 
   ChallengeSession copyWith({
     String? status,
+    int? currentTurnGroupId,
+    bool clearCurrentTurnGroup = false,
+    int? timerSeconds,
+    bool? timerEnabled,
     List<ChallengeGroup>? groups,
     List<ChallengeQuestionItem>? questions,
   }) =>
       ChallengeSession(
         id: id,
         grade: grade,
+        gradeSection: gradeSection,
         subject: subject,
         subjectPart: subjectPart,
         chapters: chapters,
         lessons: lessons,
-        timerSeconds: timerSeconds,
-        timerEnabled: timerEnabled,
+        timerSeconds: timerSeconds ?? this.timerSeconds,
+        timerEnabled: timerEnabled ?? this.timerEnabled,
         status: status ?? this.status,
+        currentTurnGroupId: clearCurrentTurnGroup
+            ? null
+            : currentTurnGroupId ?? this.currentTurnGroupId,
+        startedAt: startedAt,
+        endedAt: endedAt,
         groups: groups ?? this.groups,
         questions: questions ?? this.questions,
       );
@@ -356,6 +388,8 @@ class QuestionPackage {
   final Subject? subject;
   final Chapter? chapter;
   final Lesson? lesson;
+  final List<Chapter> chapters;
+  final List<Lesson> lessons;
   final bool isFree;
   final String? price;
   final String? platformProductId;
@@ -374,6 +408,8 @@ class QuestionPackage {
     this.subject,
     this.chapter,
     this.lesson,
+    this.chapters = const [],
+    this.lessons = const [],
     required this.isFree,
     this.price,
     this.platformProductId,
@@ -385,27 +421,48 @@ class QuestionPackage {
     required this.isOwned,
   });
 
-  factory QuestionPackage.fromJson(Map<String, dynamic> json) =>
-      QuestionPackage(
-        id: json['id'],
-        title: json['title'],
-        description: json['description'],
-        grade: json['grade'] != null ? Grade.fromJson(json['grade']) : null,
-        subject:
-            json['subject'] != null ? Subject.fromJson(json['subject']) : null,
-        chapter:
-            json['chapter'] != null ? Chapter.fromJson(json['chapter']) : null,
-        lesson: json['lesson'] != null ? Lesson.fromJson(json['lesson']) : null,
-        isFree: json['is_free'] ?? false,
-        price: json['price']?.toString(),
-        platformProductId: json['platform_product_id'],
-        androidProductId: json['android_product_id'],
-        iosProductId: json['ios_product_id'],
-        purchaseType: json['purchase_type'] ?? 'non_consumable',
-        isActive: json['is_active'] ?? true,
-        questionsCount: json['questions_count'] ?? 0,
-        isOwned: json['is_owned'] ?? json['is_free'] ?? false,
-      );
+  factory QuestionPackage.fromJson(Map<String, dynamic> json) {
+    final chapter =
+        json['chapter'] != null ? Chapter.fromJson(json['chapter']) : null;
+    final lesson =
+        json['lesson'] != null ? Lesson.fromJson(json['lesson']) : null;
+    final chapters = (json['chapters'] as List? ?? [])
+        .map((item) => Chapter.fromJson(item))
+        .toList();
+    final lessons = (json['lessons'] as List? ?? [])
+        .map((item) => Lesson.fromJson(item))
+        .toList();
+
+    return QuestionPackage(
+      id: json['id'],
+      title: json['title'],
+      description: json['description'],
+      grade: json['grade'] != null ? Grade.fromJson(json['grade']) : null,
+      subject:
+          json['subject'] != null ? Subject.fromJson(json['subject']) : null,
+      chapter: chapter,
+      lesson: lesson,
+      chapters: chapters.isNotEmpty
+          ? chapters
+          : chapter == null
+              ? const []
+              : [chapter],
+      lessons: lessons.isNotEmpty
+          ? lessons
+          : lesson == null
+              ? const []
+              : [lesson],
+      isFree: json['is_free'] ?? false,
+      price: json['price']?.toString(),
+      platformProductId: json['platform_product_id'],
+      androidProductId: json['android_product_id'],
+      iosProductId: json['ios_product_id'],
+      purchaseType: json['purchase_type'] ?? 'non_consumable',
+      isActive: json['is_active'] ?? true,
+      questionsCount: json['questions_count'] ?? 0,
+      isOwned: json['is_owned'] ?? json['is_free'] ?? false,
+    );
+  }
 
   String? productIdForStore(String store) {
     if (store == 'ios') return iosProductId ?? platformProductId;

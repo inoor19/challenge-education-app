@@ -11,6 +11,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -44,11 +45,11 @@ class ImportQuestionsPage extends Page implements HasForms
     {
         $this->form->validate();
 
-        $path = storage_path('app/public/' . $this->data['excel_file']);
-
         $import = new QuestionsImport(app(ExcelImportService::class));
 
         try {
+            $path = $this->resolveUploadedExcelPath($this->data['excel_file'] ?? null);
+
             Excel::import($import, $path);
         } catch (\Throwable $e) {
             $this->importResult = [
@@ -83,5 +84,57 @@ class ImportQuestionsPage extends Page implements HasForms
     protected function getFormActions(): array
     {
         return [];
+    }
+
+    private function resolveUploadedExcelPath(mixed $fileState): string
+    {
+        if (is_object($fileState) && method_exists($fileState, 'getRealPath')) {
+            $realPath = $fileState->getRealPath();
+
+            if (is_string($realPath) && $realPath !== '') {
+                return $realPath;
+            }
+        }
+
+        $relativePath = $this->firstUploadedPath($fileState);
+
+        if ($relativePath === null) {
+            throw new \InvalidArgumentException('لم يتم العثور على ملف Excel المرفوع.');
+        }
+
+        if (file_exists($relativePath)) {
+            return $relativePath;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        return Storage::disk('public')->path($relativePath);
+    }
+
+    private function firstUploadedPath(mixed $fileState): ?string
+    {
+        if (is_string($fileState) && trim($fileState) !== '') {
+            return $fileState;
+        }
+
+        if (is_object($fileState) && method_exists($fileState, 'getRealPath')) {
+            $realPath = $fileState->getRealPath();
+
+            return is_string($realPath) && $realPath !== '' ? $realPath : null;
+        }
+
+        if (! is_array($fileState)) {
+            return null;
+        }
+
+        foreach ($fileState as $value) {
+            $path = $this->firstUploadedPath($value);
+
+            if ($path !== null) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 }

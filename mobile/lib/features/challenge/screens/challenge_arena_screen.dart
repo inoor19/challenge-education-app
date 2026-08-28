@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -27,8 +28,9 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
 
   final FeedbackEffectsService _effects = FeedbackEffectsService();
   bool _soundMuted = false;
-  String? _feedbackResult;
   String _difficultyFilter = 'all';
+  bool _navigatingToResults = false;
+  OverlayEntry? _feedbackOverlayEntry;
   Timer? _feedbackTimer;
 
   @override
@@ -40,6 +42,7 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
   @override
   void dispose() {
     _feedbackTimer?.cancel();
+    _feedbackOverlayEntry?.remove();
     _effects.dispose();
     super.dispose();
   }
@@ -69,6 +72,11 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
           barrierDismissible: false,
           builder: (_) => const QuestionDialog(),
         );
+      } else if (prev != null &&
+          next == null &&
+          ref.read(challengeProvider).session?.status == 'completed' &&
+          context.mounted) {
+        _openResults();
       }
     });
 
@@ -83,9 +91,15 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
       if (prev == 'completed' || next != 'completed' || !context.mounted) {
         return;
       }
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const ResultsScreen()),
-        (route) => false,
+      if (ref.read(challengeProvider).activeQuestion == null) {
+        _openResults();
+      }
+    });
+
+    ref.listen(challengeProvider.select((s) => s.error), (prev, next) {
+      if (next == null || next == prev || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(next)),
       );
     });
 
@@ -106,7 +120,7 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
                   session: session,
                   muted: _soundMuted,
                   onMuteToggle: _toggleSound,
-                  onEnd: () => _confirmEnd(context),
+                  onBack: () => Navigator.of(context).maybePop(),
                 ),
                 Expanded(
                   child: _ArenaStage(
@@ -124,7 +138,6 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
               ],
             ),
           ),
-          _FeedbackOverlay(result: _feedbackResult),
         ],
       ),
     );
@@ -132,7 +145,8 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
 
   Future<void> _showAnswerFeedback(String result) async {
     _feedbackTimer?.cancel();
-    setState(() => _feedbackResult = result);
+    _feedbackOverlayEntry?.remove();
+    _feedbackOverlayEntry = null;
 
     if (result == 'correct') {
       unawaited(_effects.playCorrect(muted: _soundMuted));
@@ -140,33 +154,27 @@ class _ChallengeArenaScreenState extends ConsumerState<ChallengeArenaScreen> {
       unawaited(_effects.playWrong(muted: _soundMuted));
     }
 
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final entry = OverlayEntry(
+      builder: (_) => _FeedbackOverlay(result: result),
+    );
+    _feedbackOverlayEntry = entry;
+    overlay.insert(entry);
+
     _feedbackTimer = Timer(const Duration(milliseconds: 1250), () {
-      if (mounted) setState(() => _feedbackResult = null);
+      _feedbackOverlayEntry?.remove();
+      _feedbackOverlayEntry = null;
     });
   }
 
-  Future<void> _confirmEnd(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إنهاء التحدي'),
-        content: const Text('هل تريد إنهاء التحدي والانتقال لشاشة النتائج؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('لا'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('نعم، أنهِ'),
-          ),
-        ],
-      ),
+  void _openResults() {
+    if (_navigatingToResults || !mounted) return;
+    _navigatingToResults = true;
+    ref.invalidate(savedChallengesProvider);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ResultsScreen()),
+      (route) => false,
     );
-
-    if (confirmed == true) {
-      await ref.read(challengeProvider.notifier).completeChallenge();
-    }
   }
 }
 
@@ -338,13 +346,13 @@ class _ArenaTopBar extends StatelessWidget {
   final ChallengeSession session;
   final bool muted;
   final VoidCallback onMuteToggle;
-  final VoidCallback onEnd;
+  final VoidCallback onBack;
 
   const _ArenaTopBar({
     required this.session,
     required this.muted,
     required this.onMuteToggle,
-    required this.onEnd,
+    required this.onBack,
   });
 
   @override
@@ -361,14 +369,14 @@ class _ArenaTopBar extends StatelessWidget {
         children: [
           _CircleGlassButton(
             icon: Icons.close_rounded,
-            tooltip: 'إنهاء التحدي',
-            onPressed: onEnd,
+            tooltip: 'رجوع',
+            onPressed: onBack,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: _GlassPill(
               child: Text(
-                title.isEmpty ? 'ساحة التحدي' : title,
+                title.isEmpty ? 'ساحة التنافس' : title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -432,8 +440,6 @@ class _ArenaStageState extends ConsumerState<_ArenaStage> {
       ),
       child: Column(
         children: [
-          _TimerPill(arenaState: widget.arenaState),
-          const SizedBox(height: 8),
           _TurnPill(group: widget.arenaState.currentGroup),
           const SizedBox(height: 10),
           Expanded(
@@ -473,102 +479,6 @@ class _ArenaStageState extends ConsumerState<_ArenaStage> {
   }
 }
 
-class _TimerPill extends ConsumerWidget {
-  final ChallengeArenaState arenaState;
-
-  const _TimerPill({required this.arenaState});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final timerEnabled = arenaState.session?.timerEnabled ?? true;
-    final label =
-        timerEnabled ? _formatTime(arenaState.timerRemaining) : 'بدون مؤقت';
-    final warning = arenaState.timerRemaining <= 10 && timerEnabled;
-
-    return _GlassPill(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              color: warning ? AppTheme.danger : AppTheme.textDark,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            Icons.timer_outlined,
-            color: warning ? AppTheme.danger : AppTheme.textDark,
-            size: 21,
-          ),
-          if (timerEnabled) ...[
-            const SizedBox(width: 10),
-            _TimerIconButton(
-              icon: arenaState.timerRunning
-                  ? Icons.pause_rounded
-                  : Icons.play_arrow_rounded,
-              tooltip:
-                  arenaState.timerRunning ? 'إيقاف المؤقت' : 'تشغيل المؤقت',
-              onTap: arenaState.timerRunning
-                  ? () => ref.read(challengeProvider.notifier).pauseTimer()
-                  : () => ref.read(challengeProvider.notifier).startTimer(),
-            ),
-            const SizedBox(width: 6),
-            _TimerIconButton(
-              icon: Icons.restart_alt_rounded,
-              tooltip: 'إعادة ضبط المؤقت',
-              onTap: () => ref.read(challengeProvider.notifier).resetTimer(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(int seconds) {
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    if (s == 0 && m > 0) return '$m min';
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-}
-
-class _TimerIconButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _TimerIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(7),
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.56),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Icon(icon, color: AppTheme.textDark, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
 class _TurnPill extends StatelessWidget {
   final ChallengeGroup? group;
 
@@ -579,7 +489,7 @@ class _TurnPill extends StatelessWidget {
     return _GlassPill(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(
             Icons.groups_rounded,
@@ -587,17 +497,19 @@ class _TurnPill extends StatelessWidget {
             size: 20,
           ),
           const SizedBox(width: 8),
-          Text(
-            group == null
-                ? 'لا توجد مجموعة حالية'
-                : 'دور ${group!.name} لرمي النرد',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Tajawal',
-              color: AppTheme.textDark,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
+          Flexible(
+            child: Text(
+              group == null
+                  ? 'لا توجد مجموعة حالية'
+                  : 'دور ${group!.name} لرمي النرد',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                color: AppTheme.textDark,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -1114,7 +1026,7 @@ class _Dice3DButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPhone = MediaQuery.of(context).size.width < 600;
-    final diceSize = isPhone ? 42.0 : 36.0;
+    final diceSize = isPhone ? 54.0 : 48.0;
     final label = value == null ? 'نقاط الحظ' : '$value نقطة';
 
     return Material(
@@ -1125,8 +1037,8 @@ class _Dice3DButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           padding: EdgeInsets.symmetric(
-            horizontal: isPhone ? 10 : 12,
-            vertical: 6,
+            horizontal: isPhone ? 12 : 14,
+            vertical: isPhone ? 8 : 7,
           ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: isRolling ? 0.30 : 0.50),
@@ -1167,7 +1079,7 @@ class _Dice3DButton extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   color: AppTheme.textDark,
-                  fontSize: isPhone ? 13 : 12,
+                  fontSize: isPhone ? 15 : 14,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -1373,12 +1285,49 @@ class _TeamsDock extends StatelessWidget {
               allowTwoLineName: needsMoreNameSpace,
               group: groups[index],
               isCurrent: groups[index].id == currentGroupId,
-              onAdd: () => ref
+              onSelect: () => ref
                   .read(challengeProvider.notifier)
-                  .manualAdd(groups[index].id, 1),
-              onSubtract: () => ref
-                  .read(challengeProvider.notifier)
-                  .manualSubtract(groups[index].id, 1),
+                  .selectAnsweringGroup(groups[index].id),
+              onAdd: () async {
+                try {
+                  await ref
+                      .read(challengeProvider.notifier)
+                      .manualAdd(groups[index].id, 1);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          AppError.message(
+                            e,
+                            fallback: 'تعذر إضافة النقطة. حاول مجدداً.',
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+              onSubtract: () async {
+                try {
+                  await ref
+                      .read(challengeProvider.notifier)
+                      .manualSubtract(groups[index].id, 1);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          AppError.message(
+                            e,
+                            fallback: 'تعذر خصم النقطة. حاول مجدداً.',
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
             ),
           ),
         );
@@ -1394,6 +1343,7 @@ class _TeamScoreCard extends StatelessWidget {
   final bool allowTwoLineName;
   final ChallengeGroup group;
   final bool isCurrent;
+  final VoidCallback onSelect;
   final VoidCallback onAdd;
   final VoidCallback onSubtract;
 
@@ -1404,6 +1354,7 @@ class _TeamScoreCard extends StatelessWidget {
     required this.allowTwoLineName,
     required this.group,
     required this.isCurrent,
+    required this.onSelect,
     required this.onAdd,
     required this.onSubtract,
   });
@@ -1420,89 +1371,97 @@ class _TeamScoreCard extends StatelessWidget {
     final mutedTextColor =
         isCurrent ? Colors.white.withValues(alpha: 0.78) : AppTheme.textMuted;
 
-    return Container(
-      width: width,
-      height: height,
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 7 : 9,
-        vertical: compact ? 7 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: cardColor,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('answering-group-${group.id}'),
+        onTap: onSelect,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isCurrent
-              ? AppTheme.primaryDark.withValues(alpha: 0.32)
-              : Colors.transparent,
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+        child: Ink(
+          width: width,
+          height: height,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 7 : 9,
+            vertical: compact ? 7 : 8,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            group.name,
-            maxLines: allowTwoLineName ? 2 : 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              color: mainTextColor,
-              fontSize: titleSize,
-              height: 1.05,
-              fontWeight: FontWeight.w900,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isCurrent
+                  ? AppTheme.primaryDark.withValues(alpha: 0.32)
+                  : Colors.transparent,
+              width: 1.4,
             ),
-          ),
-          if (showPointsLabel)
-            Text(
-              'نقطة',
-              style: TextStyle(
-                color: mutedTextColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          SizedBox(height: compact ? 2 : 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _ScoreButton(
-                icon: Icons.remove_rounded,
-                onTap: onSubtract,
-                size: buttonSize,
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Text(
-                    '${group.score}',
-                    key: ValueKey(group.score),
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      color: mainTextColor,
-                      fontSize: scoreSize,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              _ScoreButton(
-                icon: Icons.add_rounded,
-                onTap: onAdd,
-                size: buttonSize,
-                color: AppTheme.primary,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.14),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-        ],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                group.name,
+                maxLines: allowTwoLineName ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: mainTextColor,
+                  fontSize: titleSize,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (showPointsLabel)
+                Text(
+                  'نقطة',
+                  style: TextStyle(
+                    color: mutedTextColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              SizedBox(height: compact ? 2 : 3),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ScoreButton(
+                    icon: Icons.remove_rounded,
+                    onTap: onSubtract,
+                    size: buttonSize,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: Text(
+                        '${group.score}',
+                        key: ValueKey(group.score),
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          color: mainTextColor,
+                          fontSize: scoreSize,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _ScoreButton(
+                    icon: Icons.add_rounded,
+                    onTap: onAdd,
+                    size: buttonSize,
+                    color: AppTheme.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

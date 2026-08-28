@@ -17,6 +17,8 @@ class QuestionPackageResource extends JsonResource
             'subject' => new SubjectResource($this->whenLoaded('subject')),
             'chapter' => new ChapterResource($this->whenLoaded('chapter')),
             'lesson' => new LessonResource($this->whenLoaded('lesson')),
+            'chapters' => ChapterResource::collection($this->whenLoaded('chapters')),
+            'lessons' => LessonResource::collection($this->whenLoaded('lessons')),
             'is_free' => $this->is_free,
             'price' => $this->price,
             'platform_product_id' => $this->platform_product_id,

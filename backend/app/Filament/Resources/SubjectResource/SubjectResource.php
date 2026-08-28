@@ -32,7 +32,7 @@ class SubjectResource extends Resource
                 ->required()
                 ->maxLength(100),
             Forms\Components\FileUpload::make('background_theme')
-                ->label('خلفية ساحة التحدي')
+                ->label('خلفية ساحة التنافس')
                 ->helperText('ارفع صورة مناسبة للمادة. القيم القديمة مثل science/math ستبقى كخلفيات افتراضية.')
                 ->disk('public')
                 ->directory('subject-backgrounds')

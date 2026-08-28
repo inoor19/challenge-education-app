@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/errors/app_error.dart';
 import '../providers/setup_provider.dart';
 import '../../../core/models/api_models.dart';
 import '../../../core/theme/app_theme.dart';
@@ -32,14 +33,17 @@ class SelectSubjectPartScreen extends ConsumerWidget {
               error: (e, _) => AppStateView(
                 icon: Icons.cloud_off_rounded,
                 title: 'تعذر تحميل أجزاء المادة',
-                message: e.toString(),
+                message: AppError.message(
+                  e,
+                  fallback: 'تعذر تحميل أجزاء المادة. حاول مجدداً.',
+                ),
               ),
               data: (parts) => parts.isEmpty
                   ? const AppStateView(
                       icon: Icons.library_books_rounded,
                       title: 'لا توجد أسئلة في أجزاء هذه المادة',
                       message:
-                          'يمكنك إضافة فصول ودروس وأسئلة من إدارة المحتوى داخل التطبيق.',
+                          'يمكنك إضافة أجزاء وفصول ودروس وأسئلة من صفحة إعداد المنافسة.',
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.all(16),
