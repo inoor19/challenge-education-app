@@ -1,0 +1,98 @@
+name: Build and Deploy to Google Play
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Build app bundle
+        working-directory: ./mobile
+        run: |
+          flutter build appbundle --release \
+            --obfuscate \
+            --split-debug-info=build/app/outputs/symbols
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-bundle
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: mobile/build/app/outputs/bundle/release/app-release.aab
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to Google Play Console
+        working-directory: ./mobile
+        run: |
+          # Install bundle tool
+          wget https://dl.google.com/android/repository/bundletool-all.jar -O bundletool.jar
+
+          # Convert AAB to universal APK for testing (optional)
+          java -jar bundletool.jar build-apks \
+            --bundle=build/app/outputs/bundle/release/app-release.aab \
+            --output=build/app/outputs/app-release.apks \
+            --ks=android/upload-keystore.jks \
+            --ks-pass=pass:${{ secrets.KEYSTORE_PASSWORD }} \
+            --ks-key-alias=${{ secrets.KEYSTORE_KEY_ALIAS }} \
+            --key-pass=pass:${{ secrets.KEYSTORE_KEY_PASSWORD }} \
+            --mode=universal
+
+        continue-on-error: true
+
+  upload-to-play-store:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: app-bundle
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.1
+          bundler-cache: true
+
+      - name: Upload to Google Play Console
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ secrets.GOOGLE_PLAY_KEY_JSON }}
+          packageName: com.challenge_education.app
+          releaseFiles: app-release.aab
+          track: internal
+          status: drafted
+
+        continue-on-error: true
