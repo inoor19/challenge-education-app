@@ -30,6 +30,9 @@ dependencies:
   # Store purchases
   in_app_purchase: ^3.1.13
 
+  # URL launcher for opening links/forms
+  url_launcher: ^6.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
