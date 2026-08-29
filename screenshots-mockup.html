@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Challenge Education - Screenshots Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Tajawal', Arial, sans-serif;
+            background: #f0f0f0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .screenshots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .screenshot {
+            width: 100%;
+            aspect-ratio: 9/16;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: white;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            height: 30px;
+            background: #1a237e;
+            color: white;
+            padding: 5px 15px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Content area */
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #D4AF37 0%, #FFF8DC 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1a237e;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #D4AF37 0%, #FFE680 100%);
+            color: #1a237e;
+            padding: 12px 40px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.2s;
+        }
+
+        .button:active {
+            transform: scale(0.95);
+        }
+
+        .input {
+            width: 100%;
+            max-width: 280px;
+            padding: 12px 15px;
+            border: 2px solid #D4AF37;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+            text-align: right;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 10px 0;
+            width: 100%;
+            border-left: 4px solid #D4AF37;
+        }
+
+        .card-title {
+            font-weight: bold;
+            color: #1a237e;
+            margin-bottom: 5px;
+        }
+
+        .card-subtitle {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .score-display {
+            font-size: 32px;
+            font-weight: bold;
+            color: #D4AF37;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .question-box {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .answer-option {
+            background: white;
+            border: 2px solid #ddd;
+            padding: 15px;
+            margin: 8px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .answer-option:hover {
+            border-color: #D4AF37;
+            background: #fffacd;
+        }
+
+        .answer-option.correct {
+            border-color: #4CAF50;
+            background: #e8f5e9;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            margin: 8px 0;
+            border-radius: 10px;
+            border-left: 4px solid #D4AF37;
+        }
+
+        .rank {
+            font-weight: bold;
+            color: #D4AF37;
+            font-size: 18px;
+            min-width: 30px;
+        }
+
+        .name {
+            flex: 1;
+            margin-left: 15px;
+            font-weight: 500;
+        }
+
+        .points {
+            color: #D4AF37;
+            font-weight: bold;
+        }
+
+        .timer {
+            background: #ffebee;
+            color: #d32f2f;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .label {
+            font-weight: 500;
+        }
+
+        .icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #ddd;
+            border-radius: 3px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #D4AF37, #FFE680);
+            animation: progress 0.5s ease-out;
+        }
+
+        @keyframes progress {
+            from { width: 0; }
+            to { width: 60%; }
+        }
+
+        .label-ar {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .screenshots-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .screenshot-title {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(26, 35, 126, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Challenge Education - App Screenshots</h1>
+
+        <div class="screenshots-grid">
+
+            <!-- Screenshot 1: Login Screen -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 1: Login</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content">
+                    <div class="logo">🏆</div>
+                    <div class="title">ساحة التنافس</div>
+                    <div class="subtitle">Challenge Education</div>
+                    <div class="subtitle" style="font-size: 12px;">تطبيق تعليمي تفاعلي</div>
+
+                    <input type="email" class="input" placeholder="البريد الإلكتروني" value="user@example.com">
+                    <input type="password" class="input" placeholder="كلمة المرور" value="••••••">
+
+                    <button class="button">دخول</button>
+                    <div class="subtitle" style="margin-top: 20px;">ليس لديك حساب؟ <strong style="color: #D4AF37;">إنشاء حساب</strong></div>
+                </div>
+            </div>
+
+            <!-- Screenshot 2: Home Dashboard -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 2: Dashboard</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start; padding-top: 50px;">
+                    <div style="width: 100%;">
+                        <div class="title" style="margin-bottom: 10px;">مرحباً، أحمد! 👋</div>
+                        <div class="card">
+                            <div class="card-title">مستوى اللاعب</div>
+                            <div class="score-display" style="font-size: 24px;">المستوى 5</div>
+                            <div class="progress-bar"><div class="progress-fill"></div></div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🎯 التحديات المتاحة</div>
+                            <div class="card-subtitle">3 تحديات جديدة</div>
+                        </div>
+                        <button class="button" style="width: 100%; margin-top: 20px;">ابدأ التحدي</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 3: Challenge Setup -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 3: Setup</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start; padding-top: 40px;">
+                    <div style="width: 100%;">
+                        <div class="title">إعداد التحدي 🎓</div>
+                        <div class="subtitle">اختر الصف والمادة</div>
+
+                        <div class="card">
+                            <div class="card-title">الصف</div>
+                            <div class="answer-option">الصف الثالث ثانوي</div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">المادة</div>
+                            <div class="answer-option">الرياضيات</div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">مستوى الصعوبة</div>
+                            <div class="answer-option">متوسط</div>
+                        </div>
+
+                        <button class="button" style="width: 100%; margin-top: 20px;">ابدأ الآن</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 4: Live Quiz -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 4: Quiz</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start;">
+                    <div style="width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <div><strong>السؤال 3 من 10</strong></div>
+                            <div class="timer">⏱️ 2:45</div>
+                        </div>
+
+                        <div class="progress-bar"><div class="progress-fill" style="width: 30%;"></div></div>
+
+                        <div class="score-display" style="font-size: 24px;">النقاط: 150</div>
+
+                        <div class="question-box">
+                            <strong>ما هي عاصمة مصر؟</strong>
+                        </div>
+
+                        <div class="answer-option">🔘 الإسكندرية</div>
+                        <div class="answer-option" style="border-color: #D4AF37; background: #fffacd;">🔘 القاهرة</div>
+                        <div class="answer-option">🔘 الجيزة</div>
+                        <div class="answer-option">🔘 أسوان</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 5: Results -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 5: Results</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content">
+                    <div style="text-align: center; width: 100%;">
+                        <div class="title" style="font-size: 24px; margin-bottom: 10px;">🎉 مبروك!</div>
+                        <div class="subtitle">أنت الأول!</div>
+
+                        <div class="score-display" style="font-size: 48px;">450/500</div>
+                        <div class="subtitle">النقاط النهائية</div>
+
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-title">✅ صحيح: 9 أسئلة</div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">❌ خطأ: 1 سؤال</div>
+                        </div>
+
+                        <button class="button" style="margin-top: 20px; width: 80%;">مشاركة النتيجة</button>
+                        <button class="button" style="width: 80%;">العودة للرئيسية</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 6: Leaderboard -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 6: Leaderboard</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start; padding-top: 30px;">
+                    <div style="width: 100%;">
+                        <div class="title">الترتيب العام 🏅</div>
+                        <div class="subtitle">أفضل اللاعبين</div>
+
+                        <div class="leaderboard-item">
+                            <div class="rank">🥇 1</div>
+                            <div class="name">أحمد محمد</div>
+                            <div class="points">1500</div>
+                        </div>
+
+                        <div class="leaderboard-item">
+                            <div class="rank" style="color: #c0c0c0;">🥈 2</div>
+                            <div class="name">فاطمة علي</div>
+                            <div class="points">1450</div>
+                        </div>
+
+                        <div class="leaderboard-item">
+                            <div class="rank" style="color: #cd7f32;">🥉 3</div>
+                            <div class="name">محمود سالم</div>
+                            <div class="points">1400</div>
+                        </div>
+
+                        <div class="leaderboard-item">
+                            <div class="rank">4</div>
+                            <div class="name">سارة أحمد</div>
+                            <div class="points">1350</div>
+                        </div>
+
+                        <div class="leaderboard-item">
+                            <div class="rank">5</div>
+                            <div class="name">علي محمد</div>
+                            <div class="points">1300</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 7: Team Screen -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 7: Team</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start; padding-top: 30px;">
+                    <div style="width: 100%;">
+                        <div class="title">فريقي 👥</div>
+                        <div class="score-display" style="font-size: 36px;">3500</div>
+                        <div class="subtitle">إجمالي نقاط الفريق</div>
+
+                        <div class="card">
+                            <div class="card-title">أعضاء الفريق</div>
+                            <div style="margin-top: 10px;">
+                                <div style="padding: 8px 0; border-bottom: 1px solid #eee;">🔹 أحمد محمد - 1500 نقطة</div>
+                                <div style="padding: 8px 0; border-bottom: 1px solid #eee;">🔹 فاطمة علي - 1400 نقطة</div>
+                                <div style="padding: 8px 0;">🔹 محمود سالم - 600 نقطة</div>
+                            </div>
+                        </div>
+
+                        <button class="button" style="width: 100%; margin-top: 20px;">دعوة أعضاء جدد</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot 8: Settings -->
+            <div class="screenshot">
+                <div class="screenshot-title">Screenshot 8: Settings</div>
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <span>⚡📶</span>
+                </div>
+                <div class="content" style="align-items: flex-start; padding-top: 20px;">
+                    <div style="width: 100%;">
+                        <div class="title">الإعدادات ⚙️</div>
+
+                        <div class="setting-item">
+                            <span class="label">👤 الملف الشخصي</span>
+                            <span>›</span>
+                        </div>
+
+                        <div class="setting-item">
+                            <span class="label">🔒 سياسة الخصوصية</span>
+                            <span>›</span>
+                        </div>
+
+                        <div class="setting-item">
+                            <span class="label">📜 شروط الخدمة</span>
+                            <span>›</span>
+                        </div>
+
+                        <div class="setting-item" style="border-color: #ffebee;">
+                            <span class="label" style="color: #d32f2f;">🗑️ طلب حذف الحساب</span>
+                            <span style="color: #d32f2f;">›</span>
+                        </div>
+
+                        <button class="button" style="width: 100%; margin-top: 30px; background: #ff9800;">تسجيل الخروج</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
