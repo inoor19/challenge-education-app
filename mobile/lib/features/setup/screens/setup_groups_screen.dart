@@ -308,7 +308,7 @@ class _TimerSettingsCard extends StatelessWidget {
                 Switch(
                   value: timerEnabled,
                   onChanged: onTimerEnabledChanged,
-                  activeThumbColor: AppTheme.cardGold,
+                  activeColor: AppTheme.cardGold,
                 ),
               ],
             ),
