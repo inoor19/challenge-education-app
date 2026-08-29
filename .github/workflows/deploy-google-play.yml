@@ -1,0 +1,39 @@
+name: Deploy to Google Play
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FLUTTER_VERSION: '3.27.3'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+        working-directory: mobile
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+        working-directory: mobile
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_KEY_JSON }}
+          packageName: com.challenge_education.app
+          releaseFiles: 'mobile/build/app/outputs/bundle/release/app-release.aab'
+          track: internal
+          status: draft
