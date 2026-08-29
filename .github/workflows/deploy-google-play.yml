@@ -58,7 +58,7 @@ jobs:
         continue-on-error: true
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_KEY_JSON }}
-          packageName: com.competitionarena.app
+          packageName: com.challenge_education.app
           releaseFiles: 'mobile/build/app/outputs/bundle/release/app-release.aab'
           track: internal
           status: draft
